@@ -12,3 +12,5 @@ Site-specific development mode is enabled only by `?demo=1`. Normal visitors loa
 - Rules for article writing remain unchanged: test questions/opinions must not fabricate purchase or usage experience, efficacy, medical advice or endorsements.
 
 The actual model tariff is recorded per request; list-price estimate is not provider invoice. Hosting stays Spark, no billing account or paid Functions.
+
+2026-11-05 endpoint diagnosis: GEO provider account has a dedicated compatible API base, now copied as Actions Secret DASHSCOPE_BASE_URL and validated before use. Both Plus and Flash were actually rejected with access_denied there too; Turbo returned model_not_found. User explicitly chose cheap models only, no Max fallback. After user fixes Plus permissions, dispatch comments with recheck_comments=true once; this clears disabled state and retains previous receipts. Failed model probes stay encrypted in the shared ledger.

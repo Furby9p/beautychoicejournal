@@ -5,7 +5,7 @@ const store=loadState(),state=store.state,mode=process.argv[2]||'audit',today=ne
 const model='qwen3.8-max',bankFile='content/question-bank.json',bank=JSON.parse(fs.readFileSync(bankFile,'utf8'));
 const save=()=>persist(store),hash=x=>createHash('sha256').update(x).digest('hex');
 const parse=text=>JSON.parse(text.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));
-function run(program,args){const env={...process.env};delete env.DASHSCOPE_API_KEY;delete env.BCJ_LEDGER_KEY;execFileSync(program,args,{stdio:'inherit',env});}
+function run(program,args){const env={...process.env};delete env.DASHSCOPE_API_KEY;delete env.DASHSCOPE_BASE_URL;delete env.BCJ_LEDGER_KEY;execFileSync(program,args,{stdio:'inherit',env});}
 async function call(stage,messages,maxTokens,batch,native=false){
  batch.responses||={};if(batch.responses[stage])return batch.responses[stage];
  const calls=state.calls.filter(x=>x.batch===batch.date);if(calls.length>=4||calls.filter(x=>x.stage===stage).length>=2)throw Error('Bounded API attempt limit reached; manual inspection required');

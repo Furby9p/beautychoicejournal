@@ -10,6 +10,10 @@ on:
         type: choice
         options: [audit, publish, comments]
         default: audit
+      recheck_comments:
+        description: Recheck cheap model after provider permissions are fixed
+        type: boolean
+        default: false
 permissions:
   contents: write
   id-token: write
@@ -42,6 +46,8 @@ jobs:
       - name: Write, verify, publish, and record encrypted usage
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
+          BCJ_COMMENT_RECHECK: ${{ inputs.recheck_comments && 'true' || 'false' }}
           BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
           BCJ_MODE: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 21 * * *' && 'comments' || 'publish') || inputs.mode }}
         run: node scripts/cloud-daily.mjs "$BCJ_MODE"
