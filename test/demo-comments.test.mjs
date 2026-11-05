@@ -16,3 +16,8 @@ test('reject malformed counts, forward references, false experience and oversize
  assert.throws(()=>validateGenerated([{body:'我亲测有效',parent:null},{body:'普通问题',parent:null}],2));
  assert.throws(()=>validateGenerated([{body:'看看说明',parent:1},{body:'是个问题',parent:null}],2));
 });
+
+test('frontend simulation is opt-in and future data is filtered',async()=>{
+ const fs=await import('node:fs');const app=fs.readFileSync(new URL('../ui/app.js',import.meta.url),'utf8');
+ assert.ok(app.includes("developmentMode=params.get('demo')==='1'"));assert.ok(app.includes('if(!developmentMode)return[]'));assert.ok(app.includes('Date.parse(x.createdAt)<=Date.now()'));
+});

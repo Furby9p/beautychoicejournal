@@ -46,3 +46,10 @@ const rulesFile=path.join(root,'firestore.rules');let rules=fs.readFileSync(rule
 const {prepareSearch}=await import('./prepare-search.mjs');prepareSearch(root,dist);
 
 const demoSource=path.join(root,'content/development/comments.json');fs.mkdirSync(path.join(dist,'development'),{recursive:true});fs.writeFileSync(path.join(dist,'development/comments.json'),fs.existsSync(demoSource)?fs.readFileSync(demoSource):JSON.stringify({version:1,environment:'development',notes:[]}));
+
+// Isolated layout fixture: no Firestore writes, no model calls, no public feed entry.
+const fixtureDate=new Date(Date.now()-8*86400000).toISOString().slice(0,10);
+const fixtureComments=[['柚子*28','先分清清洁和紧致需求，这个顺序比较清楚。','广东',false],['月亮*53','对，功能多也要看自己是否需要～','浙江',true],['奶油*16','想看具体型号说明书里适用范围的例子 👀','上海',false],['薄荷*72','可以先核对型号，再对照注册用途。','江苏',true]];
+const fixtureHtml=shell(`<article class="article-body"><div class="article-label">美容仪 · 选购讨论</div><h1>选美容仪前，先把需求聊清楚</h1><p class="subtle">${fixtureDate}</p><p>想改善细纹、日常清洁和希望紧致，是不同的需求。先明确目标，再核对具体设备的用途、说明书和证据范围。</p><section class="discussion-section"><h2>一起聊聊</h2>${fixtureComments.map(([name,body,region,nested],i)=>`<div class="reply${nested?' nested-reply':''}"><div class="reply-header"><span class="editor-avatar">${e(name.slice(0,1))}</span><strong>${e(name)}</strong><time>${new Date(Date.now()-(3-i%2)*86400000).toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'})}</time><span class="reply-region" title="192.0.2.${10+i}">IP属地：${e(region)}</span></div><p>${e(body)}</p></div>`).join('')}</section></article>`,{title:'选美容仪前，先把需求聊清楚 | 美妆选物志',url:'/development/preview/',extra:'<meta name="robots" content="noindex,nofollow,nosnippet">'});
+write('development/preview',fixtureHtml);
+fs.writeFileSync(path.join(dist,'development/fixture-metadata.json'),JSON.stringify({demo:true,fixture:true,modelGenerated:false,ipRanges:'TEST-NET',publishedAt:fixtureDate}));

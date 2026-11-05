@@ -22,3 +22,7 @@ Google部署采用限制到该仓库main分支指定workflow的OIDC短期身份�
 正式云端源码在 D:/GEO文章生成器/sites/beautychoicejournal/private/render-site 的已有独立Git仓库；操作前先取最新main，保留云端新增文章、回执和并发用户改动。主项目根目录可能只是旧快照，禁止整包覆盖云端新内容。
 
 workflow_dispatch默认audit：校验密钥、执行一次已缓存的小型健康调用（如尚未验证）、部署现有内容并检查爬虫访问；不生成新文章。首次配置后必须看到真实云端workflow成功，不能仅凭YAML存在宣称定时链路已可用。状态不明时先读原workflow运行与加密状态，不重复发起付费调用。
+
+## 开发讨论模拟
+
+仅在 ?demo=1 或 /development/preview/ 独立开发入口显示测试讨论，不在正式内容流启用。执行细节、低价模型权限、每篇2–60含楼中楼、加密排期、05:00批量释放及费用记录见 ../development-comments.md。固定版式fixture不冒充千问生成结果，不写入真实Firestore。
