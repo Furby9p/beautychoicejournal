@@ -1,3 +1,4 @@
+import {renderThread} from '../ui/comment-view.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -14,7 +15,7 @@ const articles=preview?allArticles:selectPublished(allArticles);
 if(!preview&&!articles.length)throw Error('没有获准发布的文章');
 if(fs.existsSync(dist))fs.rmSync(dist,{recursive:true,force:true});
 fs.mkdirSync(dist,{recursive:true});fs.mkdirSync(path.join(dist,'assets'),{recursive:true});
-for(const file of ['style.css','app.js','community-store.js'])fs.copyFileSync(path.join(root,'ui',file),path.join(dist,file));
+for(const file of ['style.css','app.js','community-store.js','comment-view.js'])fs.copyFileSync(path.join(root,'ui',file),path.join(dist,file));
 fs.cpSync(path.join(root,'ui/vendor'),path.join(dist,'vendor'),{recursive:true});
 if(fs.existsSync(path.join(root,'assets')))fs.cpSync(path.join(root,'assets'),path.join(dist,'assets'),{recursive:true});
 const searchVerification=JSON.parse(fs.readFileSync(path.join(root,'search-verification.json'),'utf8'));
@@ -49,7 +50,7 @@ const demoSource=path.join(root,'content/development/comments.json');fs.mkdirSyn
 
 // Isolated layout fixture: no Firestore writes, no model calls, no public feed entry.
 const fixtureDate=new Date(Date.now()-8*86400000).toISOString().slice(0,10);
-const fixtureComments=[['柚子*28','先分清清洁和紧致需求，这个顺序比较清楚。','广东',false],['月亮*53','对，功能多也要看自己是否需要～','浙江',true],['奶油*16','想看具体型号说明书里适用范围的例子 👀','上海',false],['薄荷*72','可以先核对型号，再对照注册用途。','江苏',true]];
-const fixtureHtml=shell(`<article class="article-body"><div class="article-label">美容仪 · 选购讨论</div><h1>选美容仪前，先把需求聊清楚</h1><p class="subtle">${fixtureDate}</p><p>想改善细纹、日常清洁和希望紧致，是不同的需求。先明确目标，再核对具体设备的用途、说明书和证据范围。</p><section class="discussion-section"><h2>一起聊聊</h2>${fixtureComments.map(([name,body,region,nested],i)=>`<div class="reply${nested?' nested-reply':''}"><div class="reply-header"><span class="editor-avatar">${e(name.slice(0,1))}</span><strong>${e(name)}</strong><time>${new Date(Date.now()-(3-i%2)*86400000).toLocaleDateString('zh-CN',{timeZone:'Asia/Shanghai'})}</time><span class="reply-region" title="192.0.2.${10+i}">IP属地：${e(region)}</span></div><p>${e(body)}</p></div>`).join('')}</section></article>`,{title:'选美容仪前，先把需求聊清楚 | 美妆选物志',url:'/development/preview/',extra:'<meta name="robots" content="noindex,nofollow,nosnippet">'});
+const fixtureComments=[['柚子*28','先分清清洁和紧致需求，这个顺序比较清楚。','广东',null],['月亮*53','对，功能多也要看自己是否需要～','浙江',0],['奶油*16','想看具体型号说明书里适用范围的例子 👀','上海',0],['薄荷*72','可以先核对型号，再对照注册用途。','江苏',0],['小鹿*09','所以先列需求，再看技术路线？','北京',null],['糯米*38','预算里也要算上耗材和时间呀','四川',4]].map(([nickname,body,region,parent],i)=>({id:'fixture-'+i,nickname,body,region,parentId:parent===null?null:'fixture-'+parent,ip:'192.0.2.'+(10+i),createdAt:new Date(Date.now()-(3-i%2)*86400000).toISOString(),demo:true}));
+const fixtureHtml=shell(`<article class="article-body comment-preview"><div class="article-label">美容仪 · 选购讨论</div><h1>选美容仪前，先把需求聊清楚</h1><p class="subtle">${fixtureDate}</p><p>想改善细纹、日常清洁和希望紧致，是不同的需求。先明确目标，再核对具体设备的用途、说明书和证据范围。</p><section class="discussion-section"><div class="comments-heading">共 ${fixtureComments.length} 条评论</div><div class="preview-compose"><span class="comment-compose-icon">✎</span><input placeholder="说点什么…" aria-label="说点什么"><span>友善交流</span></div><div id="preview-comments">${renderThread(fixtureComments)}</div><p class="comments-end">— THE END —</p></section></article>`,{title:'选美容仪前，先把需求聊清楚 | 美妆选物志',url:'/development/preview/',extra:'<meta name="robots" content="noindex,nofollow,nosnippet">'});
 write('development/preview',fixtureHtml);
 fs.writeFileSync(path.join(dist,'development/fixture-metadata.json'),JSON.stringify({demo:true,fixture:true,modelGenerated:false,ipRanges:'TEST-NET',publishedAt:fixtureDate}));
