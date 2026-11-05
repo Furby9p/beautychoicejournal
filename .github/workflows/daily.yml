@@ -2,12 +2,13 @@ name: Beauty daily pair
 on:
   schedule:
     - cron: '0 18 * * *'
+    - cron: '0 21 * * *'
   workflow_dispatch:
     inputs:
       mode:
         description: 'Audit existing deployment or publish the daily pair'
         type: choice
-        options: [audit, publish]
+        options: [audit, publish, comments]
         default: audit
 permissions:
   contents: write
@@ -42,5 +43,5 @@ jobs:
         env:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
-          BCJ_MODE: ${{ github.event_name == 'schedule' && 'publish' || inputs.mode }}
+          BCJ_MODE: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 21 * * *' && 'comments' || 'publish') || inputs.mode }}
         run: node scripts/cloud-daily.mjs "$BCJ_MODE"

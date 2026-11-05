@@ -44,3 +44,5 @@ write('share',shell(`<article class="article-body user-note-page"><a class="back
 
 const rulesFile=path.join(root,'firestore.rules');let rules=fs.readFileSync(rulesFile,'utf8');rules=rules.replace(/request\.resource\.data\.thread in \[[^\]]*\]/,"request.resource.data.thread in "+JSON.stringify(selectPublished(allArticles).map(a=>a.slug)));fs.writeFileSync(rulesFile,rules);
 const {prepareSearch}=await import('./prepare-search.mjs');prepareSearch(root,dist);
+
+const demoSource=path.join(root,'content/development/comments.json');fs.mkdirSync(path.join(dist,'development'),{recursive:true});fs.writeFileSync(path.join(dist,'development/comments.json'),fs.existsSync(demoSource)?fs.readFileSync(demoSource):JSON.stringify({version:1,environment:'development',notes:[]}));
