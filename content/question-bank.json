@@ -1,0 +1,659 @@
+{
+  "schema_version": 1,
+  "site": "beautychoicejournal.com",
+  "site_name": "美妆选物志",
+  "created_at": "2026-11-04",
+  "purpose": "后续逐题写作的编辑选题库；按常见用户意图编排，未进行搜索量排名。列入题库不表示已经写作或发布。",
+  "items": [
+    {
+      "id": "BCJ-001",
+      "category": "美容仪",
+      "slug": "beauty-device-guide",
+      "question": "美容仪怎么选，射频、红光和微电流分别该看哪些证据？",
+      "intent": "选购判断",
+      "decision_gain": "先判断是否需要买，再对照需求、证据、资质与长期成本缩小选择。",
+      "evidence_needed": [
+        "监管与专业组织原文",
+        "具体型号说明及原始人体研究"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "BCJ-002",
+      "category": "美容仪",
+      "slug": "led-mask-guide",
+      "question": "LED 红光面罩值得买吗，挑选时哪些信息比灯珠数量更重要？",
+      "intent": "选购判断",
+      "decision_gain": "区分适用目标、研究条件和营销参数，列出需要厂家解释清楚的字段。",
+      "evidence_needed": [
+        "皮肤科专业指导",
+        "具体型号说明与研究方案"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-003",
+      "category": "美容仪",
+      "slug": "microcurrent-guide",
+      "question": "微电流美容仪怎么用，凝胶、使用频率和禁忌该怎样核对？",
+      "intent": "使用方法",
+      "decision_gain": "按具体型号确认介质、频次、区域与禁忌，不把其他机器教程通用化。",
+      "evidence_needed": [
+        "具体型号使用说明",
+        "相关专业指导与安全资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-004",
+      "category": "美容仪",
+      "slug": "rf-device-safety",
+      "question": "家用射频美容仪怎么查资质，注册证和宣传用途不一致怎么办？",
+      "intent": "资质核查",
+      "decision_gain": "提供注册信息核对字段、条件例子及无法匹配时的下一步。",
+      "evidence_needed": [
+        "最新监管公告与查询说明",
+        "拟讨论型号的注册信息及商品说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-005",
+      "category": "美容仪",
+      "slug": "cleansing-brush",
+      "question": "洁面仪有必要买吗，哪些清洁需求可以先调整洗脸习惯？",
+      "intent": "必要性判断",
+      "decision_gain": "区分日常清洁与额外工具需求，给出暂缓购买和减少刺激的条件。",
+      "evidence_needed": [
+        "专业组织清洁指导",
+        "具体产品使用说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-006",
+      "category": "美容仪",
+      "slug": "home-vs-clinic-devices",
+      "question": "家用美容仪和医美机构的设备有什么区别，可以相互替代吗？",
+      "intent": "技术比较",
+      "decision_gain": "按设备用途、参数、操作者和使用方案比较，避免只按技术名画等号。",
+      "evidence_needed": [
+        "专业组织或监管资料",
+        "实际讨论设备的说明与研究"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-007",
+      "category": "美容仪",
+      "slug": "sensitive-skin-device-check",
+      "question": "敏感肌或皮肤正在泛红时能用美容仪吗，使用前先确认什么？",
+      "intent": "适用性判断",
+      "decision_gain": "区分日常自述敏感与持续不适，说明何时先停下并确认专业适配意见。",
+      "evidence_needed": [
+        "皮肤科专业指导",
+        "相关型号禁忌与警示"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-008",
+      "category": "美容仪",
+      "slug": "device-parameter-comparison",
+      "question": "美容仪的功率、频率、波长和能量参数，哪些可以直接比较？",
+      "intent": "参数核查",
+      "decision_gain": "检查单位、测量条件与技术路线，识别不能横向排序的宣传数字。",
+      "evidence_needed": [
+        "产品技术说明与测量定义",
+        "与参数相关的原始研究"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-009",
+      "category": "美容仪",
+      "slug": "devices-with-actives",
+      "question": "美容仪能和酸类、维 C 或 A 醇同一天用吗，怎么核对搭配要求？",
+      "intent": "搭配使用",
+      "decision_gain": "按设备说明和具体配方逐项核对，避免给所有组合统一安排频率。",
+      "evidence_needed": [
+        "设备与配套介质说明",
+        "成品护肤品说明及专业指导"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-010",
+      "category": "美容仪",
+      "slug": "device-ownership-cost",
+      "question": "美容仪买回来容易闲置吗，耗材、护理时间和维护成本怎么算？",
+      "intent": "预算判断",
+      "decision_gain": "建立机器、耗材、护理清洁时间与售后条件的长期投入核对清单。",
+      "evidence_needed": [
+        "具体型号耗材与维护说明",
+        "当前售价和保修退换政策"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-011",
+      "category": "护肤心得",
+      "slug": "morning-skincare",
+      "question": "早上和晚上护肤有什么不同，哪些步骤可以精简？",
+      "intent": "流程规划",
+      "decision_gain": "按使用场景和现有产品列必要步骤与可省略步骤，不堆瓶数。",
+      "evidence_needed": [
+        "专业组织日常护理指导",
+        "涉及产品的使用说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-012",
+      "category": "护肤心得",
+      "slug": "sunscreen-selection",
+      "question": "防晒霜怎么选，SPF、PA、防水性和肤感分别看什么？",
+      "intent": "选购判断",
+      "decision_gain": "按日常、出汗与户外场景核对防护标识、用法和补涂要求。",
+      "evidence_needed": [
+        "防晒标识相关官方资料",
+        "专业防晒指导与具体标签"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "BCJ-013",
+      "category": "护肤心得",
+      "slug": "sensitive-skin-routine",
+      "question": "敏感肌怎么精简护肤，怎样判断该减少产品还是先咨询医生？",
+      "intent": "流程排错",
+      "decision_gain": "建立减少变量的观察思路，区分可调整的习惯和需要专业评估的情况。",
+      "evidence_needed": [
+        "皮肤科专业指导",
+        "拟讨论产品说明及配方信息"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-014",
+      "category": "护肤心得",
+      "slug": "oily-skin-moisturizer",
+      "question": "油皮也需要保湿吗，乳液和面霜该怎样选？",
+      "intent": "选购判断",
+      "decision_gain": "按干燥感、使用环境和质地耐受选择，不以出油量代替完整肤况判断。",
+      "evidence_needed": [
+        "专业组织保湿指导",
+        "成品说明与相关人体证据"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-015",
+      "category": "护肤心得",
+      "slug": "makeup-removal",
+      "question": "卸妆油、卸妆膏和卸妆水怎么选，卸完还要再洗一次吗？",
+      "intent": "产品比较",
+      "decision_gain": "按妆容、防水程度与产品说明确定卸妆路线，避免一律加强清洁。",
+      "evidence_needed": [
+        "专业清洁指导",
+        "卸妆与彩妆产品说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-016",
+      "category": "护肤心得",
+      "slug": "sheet-mask-frequency",
+      "question": "面膜能天天敷吗，敷多久、什么情况下先不要敷？",
+      "intent": "使用方法",
+      "decision_gain": "按具体面膜说明与当前皮肤状态判断频次，不把短时湿润当长期改善。",
+      "evidence_needed": [
+        "产品标签与使用说明",
+        "相关皮肤护理专业资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-017",
+      "category": "护肤心得",
+      "slug": "eye-cream-guide",
+      "question": "眼霜有必要单独买吗，干纹、黑眼圈和眼袋能用同一种思路处理吗？",
+      "intent": "必要性判断",
+      "decision_gain": "拆分眼周诉求与产品可支持的范围，给出使用方式和专业评估边界。",
+      "evidence_needed": [
+        "眼周问题专业资料",
+        "具体眼霜的说明与成品证据"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-018",
+      "category": "护肤心得",
+      "slug": "dry-skin-moisture-check",
+      "question": "洗脸后总是紧绷、涂了水还觉得干，应该先检查哪些环节？",
+      "intent": "流程排错",
+      "decision_gain": "依次检查清洁、保湿产品、环境和持续不适，避免只追加补水步骤。",
+      "evidence_needed": [
+        "专业组织清洁与保湿指导",
+        "使用中产品的说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-019",
+      "category": "护肤心得",
+      "slug": "skincare-pilling",
+      "question": "护肤品为什么搓泥，怎样排查用量、叠加顺序和配方搭配？",
+      "intent": "流程排错",
+      "decision_gain": "针对未上妆时的搓泥排列单变量检查顺序，与底妆卡粉分开讨论。",
+      "evidence_needed": [
+        "具体成品配方与用法说明",
+        "可靠的配方与成膜资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-020",
+      "category": "护肤心得",
+      "slug": "clogged-pores-care-boundary",
+      "question": "反复长闭口、黑头或痘痘，怎样避免把所有问题都当作清洁不够？",
+      "intent": "问题边界",
+      "decision_gain": "说明日常护理能核对什么，以及持续、加重或不明情况何时先就医。",
+      "evidence_needed": [
+        "皮肤科专业组织资料",
+        "相关产品的适用范围与警示"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-021",
+      "category": "成分笔记",
+      "slug": "retinol-beginners",
+      "question": "新手怎么选和使用 A 醇，浓度、剂型和耐受该怎样一起看？",
+      "intent": "成分入门",
+      "decision_gain": "区分成分名与成品用法，建立起始选择、观察和停止条件。",
+      "evidence_needed": [
+        "相关专业指导及原始人体研究",
+        "具体成品使用说明"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "BCJ-022",
+      "category": "成分笔记",
+      "slug": "vitamin-c-serum",
+      "question": "维 C 精华怎么选和保存，颜色变化是否意味着不能用了？",
+      "intent": "选购与保存",
+      "decision_gain": "区分维 C 形式、配方稳定性和产品原有颜色，按厂家标准判断变化。",
+      "evidence_needed": [
+        "成品配方及保存说明",
+        "稳定性与相关原始研究"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-023",
+      "category": "成分笔记",
+      "slug": "niacinamide-guide",
+      "question": "烟酰胺浓度越高越好吗，如何判断自己是否需要换高浓度？",
+      "intent": "成分比较",
+      "decision_gain": "把目标、完整配方、耐受与具体成品证据放在浓度数字前核对。",
+      "evidence_needed": [
+        "相关人体研究",
+        "具体产品说明与配方资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-024",
+      "category": "成分笔记",
+      "slug": "hyaluronic-acid",
+      "question": "玻尿酸精华为什么用了仍然觉得干，补水和保湿应怎么搭配？",
+      "intent": "使用排错",
+      "decision_gain": "按整体配方、后续护理与环境排查，不仅依靠成分名称判断效果。",
+      "evidence_needed": [
+        "专业保湿指导",
+        "配方与相关原始研究"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-025",
+      "category": "成分笔记",
+      "slug": "exfoliation-basics",
+      "question": "果酸和水杨酸有什么区别，新手是否需要刷酸？",
+      "intent": "必要性与比较",
+      "decision_gain": "从具体诉求、可接受刺激与产品说明判断是否引入，而非先选更强浓度。",
+      "evidence_needed": [
+        "皮肤科专业指导与研究",
+        "具体成品说明及警示"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-026",
+      "category": "成分笔记",
+      "slug": "ceramide-products",
+      "question": "神经酰胺护肤品怎么选，只看成分表里有没有就够了吗？",
+      "intent": "成分核查",
+      "decision_gain": "区分原料机制与完整配方的保湿、屏障相关证据。",
+      "evidence_needed": [
+        "配方和人体研究",
+        "产品完整成分与宣称依据"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-027",
+      "category": "成分笔记",
+      "slug": "morning-c-night-retinol",
+      "question": "早 C 晚 A 适合所有人吗，怎样判断是否有必要同时引入？",
+      "intent": "搭配规划",
+      "decision_gain": "结合已有护理目标与耐受逐项核对，避免同时新增多个变量。",
+      "evidence_needed": [
+        "相关专业指导",
+        "所用成品说明与对应研究"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-028",
+      "category": "成分笔记",
+      "slug": "brightening-serum-evidence",
+      "question": "美白或淡斑精华怎么选，怎样区分成分机制、成品证据和宣传承诺？",
+      "intent": "功效核查",
+      "decision_gain": "检查实际目标、适用范围及完整配方证据，区分色素问题与一般肤色诉求。",
+      "evidence_needed": [
+        "现行化妆品监管与功效资料",
+        "成品人体证据及专业指导"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-029",
+      "category": "成分笔记",
+      "slug": "pregnancy-skincare-check",
+      "question": "孕期和哺乳期如何核对护肤品，哪些问题应向医生确认？",
+      "intent": "适用性核查",
+      "decision_gain": "提供带着具体产品与使用情况向专业人员核实的清单，不给跨产品通用处方。",
+      "evidence_needed": [
+        "权威专业组织相关指导",
+        "具体产品标签与配方信息"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-030",
+      "category": "成分笔记",
+      "slug": "same-ingredient-different-price",
+      "question": "同样含一种功效成分，贵价和便宜护肤品应该比较哪些差别？",
+      "intent": "价值比较",
+      "decision_gain": "比较剂型、稳定性、完整配方、成品证据和长期支出，不按品牌价格推定疗效。",
+      "evidence_needed": [
+        "实际产品说明与成品证据",
+        "当前容量、售价及保存条件"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-031",
+      "category": "彩妆选物",
+      "slug": "foundation-shade",
+      "question": "粉底色号怎么选，怎样在自然光下核对深浅、底调和氧化变化？",
+      "intent": "色号选择",
+      "decision_gain": "给出试色条件与观察步骤，说明照片和滤镜不能替代实际比色。",
+      "evidence_needed": [
+        "品牌具体色号与使用说明",
+        "可靠的化妆专业资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-032",
+      "category": "彩妆选物",
+      "slug": "lipstick-undertone",
+      "question": "口红颜色怎么选，冷暖皮标签为什么不一定能决定适合的唇色？",
+      "intent": "配色选择",
+      "decision_gain": "将自身唇色、明度、妆容和光线纳入试色判断，减少只看手臂色卡的误差。",
+      "evidence_needed": [
+        "产品颜色与质地信息",
+        "专业配色和化妆资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-033",
+      "category": "彩妆选物",
+      "slug": "setting-powder-spray",
+      "question": "散粉和定妆喷雾怎么选，什么妆容需要一种或两种配合？",
+      "intent": "产品比较",
+      "decision_gain": "按肤况、底妆配方与持妆场景选择，避免一律叠加更多定妆产品。",
+      "evidence_needed": [
+        "具体产品用法与配方信息",
+        "可靠的彩妆专业资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-034",
+      "category": "彩妆选物",
+      "slug": "lip-care-lipstick",
+      "question": "嘴唇起皮时怎样选口红，润唇、显色和持妆如何取舍？",
+      "intent": "适配选择",
+      "decision_gain": "区分质地偏好与持续不适，给出先护理、再试色及暂停使用的条件。",
+      "evidence_needed": [
+        "专业唇部护理指导",
+        "口红与润唇产品说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-035",
+      "category": "彩妆选物",
+      "slug": "cosmetics-expiry",
+      "question": "化妆品开封后能用多久，保质期、PAO 和变质迹象怎样一起看？",
+      "intent": "标签核查",
+      "decision_gain": "按标识、保存条件与变化判断，不用外观正常承诺产品必然安全。",
+      "evidence_needed": [
+        "官方化妆品标签与保存资料",
+        "具体产品包装及说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-036",
+      "category": "彩妆选物",
+      "slug": "foundation-texture-choice",
+      "question": "粉底液、气垫和粉霜怎么选，肤质、妆效和补妆需求如何取舍？",
+      "intent": "质地比较",
+      "decision_gain": "按覆盖需求、使用习惯与携带场景比较，不以品类名称推定适合某肤质。",
+      "evidence_needed": [
+        "具体产品质地及使用说明",
+        "可靠的彩妆专业资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-037",
+      "category": "彩妆选物",
+      "slug": "blush-texture-choice",
+      "question": "粉状、膏状和液体腮红怎么选，和底妆搭配时先看什么？",
+      "intent": "质地比较",
+      "decision_gain": "根据底妆、上妆工具与目标妆效选择质地，与腮红位置教程区分。",
+      "evidence_needed": [
+        "产品质地与用法说明",
+        "可靠的化妆专业资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-038",
+      "category": "彩妆选物",
+      "slug": "beginner-eyeshadow-palette",
+      "question": "新手眼影盘怎么选，实用颜色、质地和工具比颜色数量更重要吗？",
+      "intent": "入门选购",
+      "decision_gain": "围绕日常妆容和可实际使用的颜色组合，判断大盘是否必要。",
+      "evidence_needed": [
+        "产品配色和质地信息",
+        "可靠的化妆专业资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-039",
+      "category": "彩妆选物",
+      "slug": "makeup-spf-vs-sunscreen",
+      "question": "带 SPF 的粉底、隔离或气垫能代替防晒霜吗？",
+      "intent": "宣称核查",
+      "decision_gain": "区分标签测试条件、实际使用量与防晒行为，不把底妆标识当完整防护方案。",
+      "evidence_needed": [
+        "官方及专业组织防晒资料",
+        "实际产品的标签与用量说明"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-040",
+      "category": "彩妆选物",
+      "slug": "beginner-makeup-budget",
+      "question": "新手第一套彩妆和工具怎么买，哪些必需、哪些可以暂时不买？",
+      "intent": "预算规划",
+      "decision_gain": "从目标妆容倒推最少用品与工具，避免为尚未使用的功能和套装付费。",
+      "evidence_needed": [
+        "可靠的彩妆专业资料",
+        "实际产品容量、价格与使用要求"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-041",
+      "category": "化妆技巧",
+      "slug": "foundation-caking",
+      "question": "底妆刚上脸就卡粉、起皮，应该先排查保湿、用量还是上妆手法？",
+      "intent": "即时排错",
+      "decision_gain": "按发生部位与上妆阶段检查，一次调整一个变量，与下午脱妆分开处理。",
+      "evidence_needed": [
+        "所用底妆及妆前产品说明",
+        "可靠的化妆与护理资料"
+      ],
+      "status": "published"
+    },
+    {
+      "id": "BCJ-042",
+      "category": "化妆技巧",
+      "slug": "dry-skin-makeup-prep",
+      "question": "干皮妆前怎么保湿，等待时间、叠加层数和底妆用量如何配合？",
+      "intent": "操作步骤",
+      "decision_gain": "给出按产品状态判断下一步的方法，不把固定等待时间套给所有配方。",
+      "evidence_needed": [
+        "所用保湿与底妆产品说明",
+        "可靠的化妆和保湿指导"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-043",
+      "category": "化妆技巧",
+      "slug": "concealer-basics",
+      "question": "黑眼圈和痘印怎么遮，颜色、位置和用量应该怎样区别处理？",
+      "intent": "操作比较",
+      "decision_gain": "按遮盖对象选择校色与少量叠加路径，避免全脸统一厚涂。",
+      "evidence_needed": [
+        "彩妆产品用法与颜色信息",
+        "可靠的专业化妆资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-044",
+      "category": "化妆技巧",
+      "slug": "beginner-eyebrows",
+      "question": "新手怎么画自然眉，眉形、颜色和毛流应按什么顺序调整？",
+      "intent": "操作步骤",
+      "decision_gain": "从原有眉毛条件出发给分步检查，保留脸型与个人风格差异。",
+      "evidence_needed": [
+        "工具及产品说明",
+        "可靠的专业化妆资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-045",
+      "category": "化妆技巧",
+      "slug": "hooded-eyeliner",
+      "question": "内双或肿眼泡怎么画眼线，睁眼后看不见或晕染该怎样调整？",
+      "intent": "场景排错",
+      "decision_gain": "区分线条位置、眼皮接触与产品因素，按睁闭眼观察调整。",
+      "evidence_needed": [
+        "眼线产品用法及眼部安全说明",
+        "可靠的专业化妆资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-046",
+      "category": "化妆技巧",
+      "slug": "blush-placement",
+      "question": "腮红怎样打得自然，位置、用量和脸型应该怎样配合？",
+      "intent": "操作步骤",
+      "decision_gain": "给出镜前观察与逐步增加的判断，不把一种位置规定为所有人的标准。",
+      "evidence_needed": [
+        "产品用法与工具信息",
+        "可靠的专业配色化妆资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-047",
+      "category": "化妆技巧",
+      "slug": "makeup-brush-cleaning",
+      "question": "化妆刷和美妆蛋怎么洗、怎么晾，什么情况下应该更换？",
+      "intent": "清洁维护",
+      "decision_gain": "按材质、产品说明与干燥状态安排清洁，列出卫生和损坏判断。",
+      "evidence_needed": [
+        "工具厂家的清洁说明",
+        "可靠的皮肤与彩妆卫生指导"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-048",
+      "category": "化妆技巧",
+      "slug": "five-minute-makeup",
+      "question": "时间很少时怎么画通勤妆，哪些步骤可以省略而保持整体协调？",
+      "intent": "流程规划",
+      "decision_gain": "从目标妆效和可用时间倒推优先步骤，不承诺所有人固定分钟数。",
+      "evidence_needed": [
+        "可靠的化妆专业资料",
+        "所用产品与工具的实际用法"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-049",
+      "category": "化妆技巧",
+      "slug": "afternoon-makeup-touchup",
+      "question": "底妆到了下午斑驳、浮粉或出油，怎样补妆才不会越补越厚？",
+      "intent": "延时排错",
+      "decision_gain": "区分油光、粉层位移和局部干燥，再决定吸油、整理或局部补妆。",
+      "evidence_needed": [
+        "所用底妆及补妆产品说明",
+        "可靠的专业化妆资料"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "BCJ-050",
+      "category": "化妆技巧",
+      "slug": "beginner-eyeshadow-technique",
+      "question": "新手眼影怎么画不显脏，颜色数量、上色范围和晕染怎么控制？",
+      "intent": "操作排错",
+      "decision_gain": "按单色用量、工具与边界逐步排查，与购买眼影盘的题目分开。",
+      "evidence_needed": [
+        "眼影及工具的使用说明",
+        "可靠的专业化妆资料"
+      ],
+      "status": "planned"
+    }
+  ]
+}

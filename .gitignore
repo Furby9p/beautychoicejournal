@@ -1,2 +1,8 @@
+node_modules/
 .firebase/
 firebase-debug.log
+.env*
+private/
+dist/
+output/
+gha-creds-*.json

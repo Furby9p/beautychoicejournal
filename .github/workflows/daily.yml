@@ -1,0 +1,46 @@
+name: Beauty daily pair
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit existing deployment or publish the daily pair'
+        type: choice
+        options: [audit, publish]
+        default: audit
+permissions:
+  contents: write
+  id-token: write
+concurrency:
+  group: beauty-publishing
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'Furby9p/beautychoicejournal' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Configure publishing identity
+        run: |
+          git config user.name 'Beauty publisher'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: 'projects/1029038857624/locations/global/workloadIdentityPools/bcj-github/providers/github-main'
+          service_account: 'bcj-publisher@beautychoicejournal.iam.gserviceaccount.com'
+      - run: npm ci --no-audit --no-fund
+      - name: Test pipeline
+        run: npm test
+      - name: Write, verify, publish, and record encrypted usage
+        env:
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
+          BCJ_MODE: ${{ github.event_name == 'schedule' && 'publish' || inputs.mode }}
+        run: node scripts/cloud-daily.mjs "$BCJ_MODE"
