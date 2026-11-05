@@ -4,3 +4,5 @@ test('encrypted cost history round-trips and rejects tampering',()=>{const key=r
 test('fees use actual token usage and preserve unknown values',()=>{assert.equal(estimateCost({prompt_tokens:1000000,completion_tokens:1000000,prompt_tokens_details:{cached_tokens:100000}}).modelEstimateCny,46.95);assert.equal(estimateCost(null).modelEstimateCny,null);});
 
 test('comment model uses its own cheap tariff',()=>{assert.equal(estimateCost({prompt_tokens:1000000,completion_tokens:1000000},false,'qwen-turbo').modelEstimateCny,.9);assert.equal(estimateCost(null,false,'qwen-turbo').modelEstimateCny,null);});
+
+test('plus small-context fee is independent of Max',()=>assert.equal(estimateCost({prompt_tokens:1000000,completion_tokens:1000000},false,'qwen-plus').modelEstimateCny,2.8));

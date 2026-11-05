@@ -4,7 +4,7 @@ Site-specific development mode is enabled only by `?demo=1`. Normal visitors loa
 
 - Real posts/comments are untouched. Generated discussion plans and full provider responses are AES-GCM encrypted in the existing cloud state. Every published test record retains `demo:true`.
 - Documentation-only TEST-NET IPs; simulated region separately weighted ~95% mainland with greater weights for large/developed provinces. These are not actual IP geolocations.
-- Each approved article has 2–60 generated entries including replies. One low-cost `qwen-turbo` request handles up to 120 entries across several articles, using only titles/summaries/takeaways, no search and no thinking. No expensive fallback.
+- Each approved article has 2–60 generated entries including replies. One low-cost `qwen-plus` request handles up to 120 entries across several articles, using only titles/summaries/takeaways, no search and no thinking. Turbo returned HTTP429 on initial cloud verification; switched explicitly to the still-cheap Plus model. No Max fallback.
 - Article workflow pre-generates the discussion batch. A second schedule at Beijing 05:00 releases all due test entries in one Hosting deployment, never future timestamps. Initial old notes are queued by that job too.
 - Dates are 1–7 calendar days after the article, 01:00–04:00 Beijing, released by the 05:00 batch. Parent precedes its reply. No per-comment requests. GH schedules can be delayed.
 - Public released file: `/development/comments.json`, noindex/no-store, only due entries. Full future plans stay encrypted. Normal view never fetches it.
