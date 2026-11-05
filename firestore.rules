@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed(){return request.auth != null;}
+  function text(v,min,max){return v is string && v.size() >= min && v.size() <= max;}
+  function author(){return signed() && request.resource.data.uid == request.auth.uid && text(request.resource.data.nickname,1,24) && text(request.resource.data.body,5,5000) && request.resource.data.createdAt == request.time;}
+  function locked(id,kind){let c=getAfter(/databases/$(database)/documents/cooldowns/$(request.auth.uid)).data;return c.lastAt==request.time && c.itemId==id && c.kind==kind;}
+  match /cooldowns/{uid} {
+   allow get: if signed() && uid==request.auth.uid;
+   allow create,update: if signed() && uid==request.auth.uid && request.resource.data.keys().hasOnly(['lastAt','itemId','kind']) && request.resource.data.lastAt==request.time && (!exists(/databases/$(database)/documents/cooldowns/$(uid)) || resource.data.lastAt + duration.value(120,'s') <= request.time) && ((request.resource.data.kind=='post' && getAfter(/databases/$(database)/documents/posts/$(request.resource.data.itemId)).data.uid==uid) || (request.resource.data.kind=='comment' && getAfter(/databases/$(database)/documents/comments/$(request.resource.data.itemId)).data.uid==uid));
+  }
+  match /posts/{id} {
+   allow get: if true;
+   allow list: if request.query.limit <= 30;
+   allow create: if author() && locked(id,'post') && request.resource.data.keys().hasOnly(['uid','nickname','body','createdAt','title','category','cover','image']) && (!('image' in request.resource.data) || (request.resource.data.image is string && request.resource.data.image.size() <= 100000 && request.resource.data.image.matches('data:image/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+'))) && text(request.resource.data.title,4,80) && request.resource.data.category in ['护肤心得','美容仪','彩妆选物','化妆技巧','成分笔记'] && request.resource.data.cover in ['skincare','device','serum','cream','makeup','lipstick','brow','sunscreen'];
+   allow delete: if signed() && resource.data.uid==request.auth.uid;
+  }
+  match /comments/{id} {
+   allow get: if true;
+   allow list: if request.query.limit <= 30;
+   allow create: if author() && locked(id,'comment') && request.resource.data.keys().hasOnly(['uid','nickname','body','createdAt','thread']) && text(request.resource.data.thread,1,100) && (request.resource.data.thread=='beauty-device-guide' || exists(/databases/$(database)/documents/posts/$(request.resource.data.thread)));
+   allow delete: if signed() && resource.data.uid==request.auth.uid;
+  }
+  match /reports/{id} {
+   allow create: if signed() && id==request.auth.uid+'_'+request.resource.data.target && request.resource.data.keys().hasOnly(['uid','target','createdAt']) && request.resource.data.uid==request.auth.uid && request.resource.data.createdAt==request.time && text(request.resource.data.target,1,100);
+  }
+ }
+}
