@@ -280,7 +280,9 @@ export class MatrixRunner{
     else approvedArtifacts.push({slug:article.slug,url,status:'approved_unverified',writtenAt:article.matrix.writtenAt});
    }
    const undatedCount=this.state.calls.filter(undatedLegacy).length,events=this.state.calls.filter(c=>!undatedLegacy(c)).map(c=>c.event||=usageEvent(c));
-   for(let offset=0;offset<Math.max(1,events.length);offset+=50)if(!await this.report({day:dayAt(this.now()),slot:1,runId:`${this.runId}-audit-${offset/50}`},'skipped',{activity:'audit',reason:'已同步历史账本，未调用模型'+(undatedCount?'；历史账本'+undatedCount+'条时间缺失待核对，未计入今日费用':'')+(this.state.lastFailure?'；上次失败：'+this.state.lastFailure.at+' '+this.state.lastFailure.message:''),failure:this.state.lastFailure?.message,publishedArticles,approvedArtifacts,usageEvents:events.slice(offset,offset+50),lastFailure:this.state.lastFailure||null}))return {failed:true,reportPending:true};
+   const rejected=this.state.calls.findLast(c=>c.matrixDay&&c.status==='http-error'),providerMessage=rejected?.response?.error?.message||rejected?.response?.message;
+   const providerDetail=typeof providerMessage==='string'?'；提供方说明：'+this.redact(providerMessage).replace(/sk-[a-zA-Z0-9_-]{10,}|Bearer\s+\S+/g,'[redacted]'):'';
+   for(let offset=0;offset<Math.max(1,events.length);offset+=50)if(!await this.report({day:dayAt(this.now()),slot:1,runId:`${this.runId}-audit-${offset/50}`},'skipped',{activity:'audit',reason:'已同步历史账本，未调用模型'+providerDetail+(undatedCount?'；历史账本'+undatedCount+'条时间缺失待核对，未计入今日费用':'')+(this.state.lastFailure?'；上次失败：'+this.state.lastFailure.at+' '+this.state.lastFailure.message:''),failure:this.state.lastFailure?.message,publishedArticles,approvedArtifacts,usageEvents:events.slice(offset,offset+50),lastFailure:this.state.lastFailure||null}))return {failed:true,reportPending:true};
    console.log('Matrix audit: historical facts queued/reported; no model or deployment call.');return;
   }
   if(!duePlan(plan,this.now())){console.log('Matrix plan not due or paused; no paid call.');return;}

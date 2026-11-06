@@ -190,3 +190,9 @@ test('provider failures expose only a short ASCII code and never a raw message',
   await assert.rejects(runner.model('research',[],20,{day:'2026-11-06',slot:1,question:{id:'BCJ-002'}}),error=>{assert.match(error.message,/Qwen HTTP 403/);assert.equal(error.message.includes('access_denied'),code==='access_denied');assert(!error.message.includes('RAW_DONT_SHOW'));assert(!error.message.includes('private-key'));return true;});
  }
 });
+
+test('audit exposes sanitized provider explanation without another model request',async()=>{
+ const secret='private-key-value',posted=[],state={calls:[{id:'failed-id',matrixDay:'2026-11-06',matrixSlot:1,stage:'research',model:'qwen-plus',startedAt:'2026-11-06T02:00:00Z',status:'http-error',httpStatus:403,response:{error:{message:'Model unavailable '+secret+' sk-'+ 'x'.repeat(28)}}}]};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',apiKey:secret,now:()=>new Date('2026-11-06T03:00:00Z'),articles:()=>[],fetch:async(url,options)=>{if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};assert.ok(url.includes('/report/'));posted.push(JSON.parse(options.body));return{ok:true,status:200};}});
+ await runner.main('audit');assert.match(posted[0].reason,/Model unavailable/);assert.ok(!posted[0].reason.includes(secret));assert.ok(!posted[0].reason.includes('x'.repeat(28)));assert.equal(posted.length,1);
+});
