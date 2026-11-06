@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MatrixRunner,hash} from '../scripts/matrix-runner.mjs';
+import {MatrixRunner,hash,validateFactPack} from '../scripts/matrix-runner.mjs';
 
 const quote='The original manufacturer instruction contains this sufficiently long source quotation.';
 const question={id:'BCJ-002',slug:'led-mask-guide',question:'LED红光面罩值得买吗？',category:'美容仪'};
@@ -47,4 +47,30 @@ test('an interrupted revised review resumes only its revision stage and never us
 test('a plan paused between stages stops before a new paid provider request',async()=>{
  const {runner,state}=setup({apiKey:'test',fetch:async()=>{throw Error('paid call after pause');}});runner.currentPlan.daily={enabled:true};runner.plan=async()=>({daily:{enabled:false}});
  await assert.rejects(runner.model('revise',[],100,slot()),/paused|due/i);assert.equal(state.calls.length,0);
+});
+
+test('grounded composition requires literal source quotations and two source identities',()=>{
+ const pack={facts:[1,2,1,2].map((sourceId,i)=>({sourceId,quote,claim:'已核对原文的中文事实'+i,scope:'仅限该原文具体范围'}))};
+ assert.doesNotThrow(()=>validateFactPack(pack,sources()));assert.throws(()=>validateFactPack({...pack,facts:pack.facts.map(f=>({...f,quote:'invented quotation unsupported by original'}))},sources()),/quote|原文/i);assert.throws(()=>validateFactPack({...pack,facts:pack.facts.map(f=>({...f,sourceId:1}))},sources()),/two|两个/i);
+});
+
+test('grounded recovery composes from verified facts without feeding the rejected old draft back into writer',async()=>{
+ const s={...slot(),sources:sources(),contentRecovery:{revision:'beauty-evidence-v2',sourcesChecked:true},article:{...article(),summary:'OLD_UNSUPPORTED_ASSERTION'},review:{approved:false,issues:['Unsupported old claim']},revisedAt:'2026-11-06T06:41:00Z'},pack={facts:[1,2,1,2].map(sourceId=>({sourceId,quote,claim:'可核对的中文事实',scope:'原文范围'}))},{runner,state}=setup({contentRevision:'beauty-evidence-v2'}),stages=[];
+ runner.model=async(stage,messages)=>{stages.push(stage);if(stage==='write-grounded'){assert(!JSON.stringify(messages).includes('OLD_UNSUPPORTED_ASSERTION'));assert(JSON.stringify(messages).includes('可核对的中文事实'));}state.calls.push({matrixDay:s.day,matrixSlot:1,stage,status:'returned',provider:'openrouter',model:'qwen/qwen-plus'});return{choices:[{message:{content:JSON.stringify(stage==='evidence-extract'?pack:stage==='write-grounded'?article():approved())}}]};};
+ await runner.prepare(s,plan);assert.deepEqual(stages,['evidence-extract','write-grounded','review-grounded']);assert.equal(s.phase,'approved');await runner.prepare(s,plan);assert.equal(stages.length,3);assert.equal(s.groundedHistory[0].article.summary,'OLD_UNSUPPORTED_ASSERTION');
+});
+
+test('grounded draft resumes its own review stage after a report interruption',async()=>{
+ const s={...slot(),sources:sources(),article:{...article(),provider:'openrouter',model:'qwen/qwen-plus'},groundedAt:'2026-11-06T07:00:00Z'},{runner}=setup({contentRevision:'beauty-evidence-v2'}),stages=[];
+ runner.model=async stage=>{stages.push(stage);return{choices:[{message:{content:JSON.stringify(approved())}}]};};await runner.prepare(s,plan);assert.deepEqual(stages,['review-grounded']);
+});
+
+test('recovered grounded draft revised after rejection resumes revision review instead of original grounded review',async()=>{
+ const s={...slot(),sources:sources(),contentRecovery:{revision:'beauty-evidence-v2',sourcesChecked:true},article:{...article(),provider:'openrouter',model:'qwen/qwen-plus'},groundedAt:'2026-11-06T07:00:00Z',revisedAt:'2026-11-06T07:10:00Z',reviewStage:'review-revision',factPack:{facts:[1,2,1,2].map(sourceId=>({sourceId,quote,claim:'原文事实',scope:'原文范围'}))}},{runner}=setup({contentRevision:'beauty-evidence-v2'}),stages=[];
+ runner.model=async stage=>{stages.push(stage);return{choices:[{message:{content:JSON.stringify(approved())}}]};};await runner.prepare(s,plan);assert.deepEqual(stages,['review-revision']);
+});
+
+test('grounded evidence excludes unused marketing sources and remaps citations without losing original captures',async()=>{
+ const all=[{...sources()[0],url:'https://www.foreo.com/marketing',text:'Marketing copy without instructions'},...sources()],s={...slot(),sources:all},pack={facts:[2,3,2,3].map(sourceId=>({sourceId,quote,claim:'型号说明中可核查的事实',scope:'仅限该型号说明'}))},{runner,state}=setup({contentRevision:'beauty-evidence-v2'});
+ runner.model=async stage=>{if(stage==='write-grounded')assert.equal(s.sources.length,2);state.calls.push({matrixDay:s.day,matrixSlot:1,stage,status:'returned',provider:'openrouter',model:'qwen/qwen-plus'});return{choices:[{message:{content:JSON.stringify(stage==='evidence-extract'?pack:stage==='write-grounded'?article():approved())}}]};};await runner.prepare(s,plan);assert.equal(s.sources.length,2);assert(!s.article.sources.some(x=>x.url.includes('marketing')));assert.deepEqual(s.factPack.facts.map(f=>f.sourceId),[1,2,1,2]);assert.equal(s.evidenceHistory.at(-1).sources.length,3);
 });
