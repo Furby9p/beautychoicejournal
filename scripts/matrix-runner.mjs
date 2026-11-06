@@ -179,6 +179,17 @@ export class MatrixRunner{
   }
   if(changed)this.save();return changed;
  }
+ recoverRateLimited(day){
+  let changed=false;
+  for(const s of this.m.days[day]?.slots||[]){
+   if(s.phase!=='failed'||!/OpenRouter HTTP 429/.test(s.failure||'')||s.publishedAt||s.deployAttemptAt||(s.rateLimitRecoveries?.length||0)>=2||this.state.calls.some(c=>c.articleId===s.question?.id&&ambiguousCall(c)))continue;
+   const call=this.state.calls.findLast(c=>c.matrixDay===day&&c.matrixSlot===s.slot&&c.provider==='openrouter');
+   if(!call||call.model!==this.openRouterModel||call.status!=='http-error'||call.httpStatus!==429||hasCompletion(call.response)||!validTimestamp(call.completedAt)||this.state.calls.filter(c=>c.matrixDay===day&&c.matrixSlot===s.slot&&c.stage===call.stage&&c.provider==='openrouter').length!==1)continue;
+   const readyAt=call.retryReadyAt||new Date(Date.parse(call.completedAt)+1800000).toISOString();if(this.now().getTime()<Date.parse(readyAt))continue;
+   s.rateLimitRecoveries||=[];s.rateLimitRecoveries.push({at:this.at(),sourceId:call.id,stage:call.stage,readyAt,previousRunId:s.runId,previousFailure:s.failure});s.runId=`${this.runId}-${s.slot}`;s.phase='planned';delete s.failure;changed=true;
+  }
+  if(changed)this.save();return changed;
+ }
  migrateProviderRevision(day){
   if(this.providerRevision!==PROVIDER_REVISION||this.m.providerMigration?.revision===PROVIDER_REVISION||!openRouterConfigured(this.openRouterKey,this.openRouterModel))return false;
   const daily=this.m.days[day];if(!daily)return false;
@@ -248,21 +259,25 @@ export class MatrixRunner{
    if(route.provider==='dashscope'&&(this.m.providerBlocked||rows.some(c=>(c.provider||'dashscope')==='dashscope')))continue;
    if(route.provider==='openrouter'){
     if(!openRouterConfigured(route.key,route.model))throw Error((lastFailure?lastFailure+'; ':'')+'OpenRouter fallback unavailable; configured cheap model required');
-    if(rows.some(c=>c.provider==='openrouter'))continue;
+    const prior=rows.filter(c=>c.provider==='openrouter'),last=prior.at(-1),grant=slot.rateLimitRecoveries?.find(r=>r.stage===stage&&r.sourceId===last?.id);
+    if(prior.length&&!(prior.length===1&&last.status==='http-error'&&last.httpStatus===429&&!hasCompletion(last.response)&&grant&&this.now().getTime()>=Date.parse(grant.readyAt)))continue;
     if(this.m.openRouterBlocked)throw Error('OpenRouter permission blocked; manual inspection required');
     await this.acceptedReport(slot,stage.startsWith('review')?'reviewing':stage.startsWith('write')||['revise','correct-final'].includes(stage)?'writing':'researching',{reason:'Known primary rejection; authorized OpenRouter fallback'});
    }else if(!route.key)throw Error('Qwen key unavailable');
-   const articleCalls=this.state.calls.filter(c=>c.matrixDay===slot.day&&c.matrixSlot===slot.slot),limit=(['beauty-evidence-v2','beauty-evidence-v3'].includes(this.contentRevision)?8:6)+(slot.modelRecovery?4:0)+(slot.providerMigration?1:0);
+   const articleCalls=this.state.calls.filter(c=>c.matrixDay===slot.day&&c.matrixSlot===slot.slot),limit=(['beauty-evidence-v2','beauty-evidence-v3'].includes(this.contentRevision)?8:6)+(slot.modelRecovery?4:0)+(slot.providerMigration?1:0)+Math.min(2,slot.rateLimitRecoveries?.length||0);
    if(articleCalls.length>=limit)throw Error('Bounded article call limit reached');
    if(this.currentPlan?.daily){const fresh=await this.plan();if(!duePlan(fresh,this.now())||dayAt(this.now())!==slot.day)throw new PlanPaused('Matrix plan paused or no longer due; no paid call');}
    const body=route.provider==='dashscope'?primaryBody:{model:route.model,messages,max_tokens:maxTokens,temperature:.2,response_format:{type:'json_object'},provider:{require_parameters:true},...(route.model==='qwen/qwen3.7-plus'?{reasoning:{enabled:false}}:{}),...(search?{plugins:[{id:'web',engine:'exa',max_results:6}]}:{})};
+   const retry=slot.rateLimitRecoveries?.find(r=>r.stage===stage&&!r.startedAt);if(retry){const previous=this.state.calls.find(c=>c.id===retry.sourceId);if(!previous||previous.inputHash!==hash(JSON.stringify({endpoint:route.endpoint,body})))throw Error('Rate-limit retry inputs changed; manual inspection required');}
    const call={id:randomUUID(),matrixDay:slot.day,matrixSlot:slot.slot,articleId:slot.question.id,stage,provider:route.provider,keyAlias:route.keyAlias,providerRevision:this.providerRevision,model:route.model,stageHash,inputHash:hash(JSON.stringify({endpoint:route.endpoint,body})),endpoint:route.endpoint,search,startedAt:this.at(),status:'pending',usage:null,cost:route.provider==='openrouter'?openRouterCost(null,this.fxRate):estimateCost(null,false,'qwen-plus')};
+   if(retry){call.retryOf=retry.sourceId;retry.startedAt=call.startedAt;}
    slot.startedAt||=call.startedAt;if(slot.providerMigration)slot.providerMigration.startedAt||=call.startedAt;if(slot.contentRecovery)slot.contentRecovery.startedAt||=call.startedAt;if(slot.evidenceRecovery)slot.evidenceRecovery.startedAt||=call.startedAt;if(slot.modelRecovery)slot.modelRecovery.startedAt||=call.startedAt;if(slot.correctionRecovery)slot.correctionRecovery.startedAt||=call.startedAt;this.state.calls.push(call);this.save();
    try{
     const r=await this.fetch(route.endpoint,{method:'POST',headers:{Authorization:'Bearer '+route.key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(180000),redirect:'error'});
     call.httpStatus=r.status;
     const raw=await r.text();let result;try{result=JSON.parse(raw);}catch{if(r.ok)throw Error('Unparseable provider response; no paid retry');result=null;}
     call.response=result;call.requestId=result?.id||result?.request_id;call.usage=result?.usage||null;call.cost=route.provider==='openrouter'?openRouterCost(call.usage,this.fxRate):estimateCost(call.usage,false,'qwen-plus');call.status=r.ok?'returned':'http-error';call.completedAt=this.at();
+    if(route.provider==='openrouter'&&r.status===429&&!hasCompletion(result)){const value=r.headers?.get?.('retry-after'),seconds=Number(value),server=value?(Number.isFinite(seconds)?Date.parse(call.completedAt)+Math.max(0,seconds)*1000:Date.parse(value)):0;call.retryReadyAt=new Date(Math.max(Date.parse(call.completedAt)+1800000,Number.isFinite(server)?server:0)).toISOString();}
     if([401,402,403,404].includes(r.status)){const marker={at:call.completedAt,status:r.status,model:route.model,provider:route.provider};if(route.provider==='dashscope')this.m.providerBlocked=marker;else this.m.openRouterBlocked=marker;}
     const code=result?.error?.code||result?.code;if(typeof code==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(code))call.providerErrorCode=code;
     call.event=usageEvent(call);this.save();
@@ -444,6 +459,7 @@ export class MatrixRunner{
   this.recoverValidatedEvidence(day);
   this.migrateModelRevision(day);
   this.recoverCurrentModelReview(day);
+  this.recoverRateLimited(day);
   if(this.recheckProvider===true)this.authorizeProviderRecheck(day);
   const recent=(plan.recentReports||[]).filter(r=>r.day===day),completed=new Map();
   for(const r of recent.filter(r=>r.status==='published'))for(const id of r.articleIds||[])completed.set(id,r);
@@ -465,7 +481,7 @@ export class MatrixRunner{
    if(this.m.providerBlocked&&!openRouterConfigured(this.openRouterKey,this.openRouterModel)){slot.phase='skipped';slot.failure='qwen-plus permission blocked; no fallback';this.save();if(!await this.report(slot,'skipped',{failure:slot.failure}))return {failed:true,reportPending:true};continue;}
    if(slot.slot===2){
     const first=daily.slots[0],gap=Math.max(10,Number(fresh.daily.articleGapMinutes)||10)*60000;
-    const firstStart=first.correctionRecovery?.startedAt||first.modelRecovery?.startedAt||first.evidenceRecovery?.startedAt||first.contentRecovery?.startedAt||first.providerMigration?.startedAt||first.startedAt;
+    const firstStart=first.rateLimitRecoveries?.at(-1)?.startedAt||first.correctionRecovery?.startedAt||first.modelRecovery?.startedAt||first.evidenceRecovery?.startedAt||first.contentRecovery?.startedAt||first.providerMigration?.startedAt||first.startedAt;
     if(firstStart){while(this.now().getTime()<Date.parse(firstStart)+gap){await this.sleep(Math.min(30000,Date.parse(firstStart)+gap-this.now().getTime()));if(dayAt(this.now())!==day)return;const latest=await this.plan();if(!duePlan(latest,this.now()))return;}}
    }
    try{const result=await this.publish(slot,{...fresh,writing:daily.snapshot.writing});if(result?.paused)return;}
