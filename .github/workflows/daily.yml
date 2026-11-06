@@ -54,6 +54,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: qwen/qwen-plus
           MATRIX_PROVIDER_REVISION: geo-shared-openrouter-v1
+          MATRIX_CONTENT_REVISION: beauty-evidence-v1
           BCJ_COMMENT_RECHECK: ${{ inputs.recheck_comments && 'true' || 'false' }}
           BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
           MATRIX_RUNNER_TOKEN: ${{ secrets.MATRIX_RUNNER_TOKEN }}
