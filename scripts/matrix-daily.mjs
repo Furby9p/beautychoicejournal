@@ -36,9 +36,10 @@ const runner=new MatrixRunner({state:store.state,save:()=>persist(store),run:com
   execFileSync('git',['push','origin','HEAD:main'],{stdio:'ignore'});
  }
 });
-try{if(runner.logResult(await runner.main(process.argv[2]||'audit')))process.exitCode=1;}
+const mode=process.argv[2]||'audit';
+try{if(runner.logResult(await runner.main(mode)))process.exitCode=1;}
 catch(error){
  const message=runner.redact(error);store.state.lastFailure={at:new Date().toISOString(),message};
- try{persist(store);if(runner.currentPlan)await runner.report({day:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date()),slot:1},'failed',{failure:message});}catch{}
+ try{persist(store);if(runner.currentPlan)await runner.report({day:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date()),slot:1,...(mode==='audit'?{runId:`${runner.runId}-audit-failure`}:{})},'failed',{failure:message,...(mode==='audit'?{activity:'audit'}:{})});}catch{}
  console.error('Matrix writer stopped: '+message);process.exitCode=1;
 }

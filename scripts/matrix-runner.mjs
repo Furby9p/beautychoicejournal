@@ -45,12 +45,22 @@ export function usageEvent(call){
  return {provider:'DashScope / Qwen',sourceId,keyAlias:'本站云端Key',model:call.model,occurredAt:call[timeField],inputTokens:usage?.prompt_tokens??usage?.input_tokens??null,outputTokens:usage?.completion_tokens??usage?.output_tokens??null,amountMicros:Number.isFinite(cost)?Math.round(cost*1e6):null,currency:'CNY',amountKind:Number.isFinite(cost)?'estimated':'unknown',status:['returned','validated'].includes(call.status)?'success':call.status==='http-error'?'failed':'unknown',activity:call.stage,evidence:call.cost?.priceSource,note:`公开单价估算，非供应商账单；价格核对日期 ${call.cost?.priceCheckedAt||'未知'}${call.search?'；联网搜索收费未知，不含在模型 token 估算中':''}${!requestId?'；账本记录编号，供应商请求ID缺失':''}${timeField!=='startedAt'?'；调用时间依据原始账本 '+timeField+'，开始时间缺失或无效':''}`,priceSource:call.cost?.priceSource,priceCheckedAt:call.cost?.priceCheckedAt};
 }
 const validTimestamp=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)&&Number.isFinite(Date.parse(value));
+const undatedLegacy=call=>!call.matrixDay&&!['startedAt','at','completedAt'].some(key=>validTimestamp(call[key]));
 const identityFields=['provider','sourceId','keyAlias'];
 const missingIdentity=event=>identityFields.filter(key=>typeof event[key]!=='string'||!event[key].trim());
 function stableJson(value){return JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.entries(item).sort(([a],[b])=>a<b?-1:a>b?1:0)):item);}
 const withoutIdentity=event=>Object.fromEntries(Object.entries(event).filter(([key])=>!identityFields.includes(key)));
 export function repairLegacyUsage(state){
- const records=state.calls.map(call=>({call,old:call.event,expected:usageEvent(call)})),patches=[];
+ const records=state.calls.map(call=>({call,old:call.event,undated:undatedLegacy(call),expected:undatedLegacy(call)?null:usageEvent(call)})),patches=[],quarantine=[],deliveries=[];
+ const undated=records.filter(r=>r.undated);if(undated.length>100)throw Error('Legacy audit quarantine requires inspection: undated count exceeds 100');
+ for(const record of undated){const originalCallHash=hash(stableJson(record.call));quarantine.push({id:'call:'+originalCallHash,kind:'call',originalCallHash,originalCall:structuredClone(record.call),reason:'missing_original_timestamp'});}
+ const matchRecords=event=>{
+  if(typeof event.sourceId==='string'&&event.sourceId.trim()){
+   const identified=records.filter(r=>[r.call.requestId,r.call.id,r.old?.sourceId,r.expected?.sourceId].includes(event.sourceId));if(identified.length)return identified;
+  }
+  const exact=records.filter(r=>[r.old,r.expected].filter(Boolean).some(old=>stableJson(withoutIdentity(old))===stableJson(withoutIdentity(event))));if(exact.length)return exact;
+  return ['occurredAt','model','activity'].every(key=>typeof event[key]==='string'&&event[key])?records.filter(r=>r.expected?.occurredAt===event.occurredAt&&r.call.model===event.model&&r.call.stage===event.activity):[];
+ };
  const patch=(target,expected)=>{
   const missing=missingIdentity(target);if(!missing.length&&validTimestamp(target.occurredAt))return;
   const fields=Object.fromEntries(missing.map(key=>[key,expected[key]]));
@@ -61,19 +71,29 @@ export function repairLegacyUsage(state){
   }
   patches.push({target,fields});
  };
- for(const record of records)if(record.old)patch(record.old,record.expected);
+ for(const record of records)if(record.old&&!record.undated)patch(record.old,record.expected);
  for(const job of state.matrixRuns?.outbox||[]){
   const body=job.body;if(body?.status!=='skipped'||!(body.activity==='audit'||String(body.runId||'').includes('-audit')))continue;
+  const retained=[];let removed=0;const originalJobHash=hash(stableJson(body));
   for(const event of body.usageEvents||[]){
-   const missing=missingIdentity(event);if(!missing.length&&validTimestamp(event.occurredAt))continue;
-   let matches=records.filter(r=>[r.old,r.expected].filter(Boolean).some(old=>stableJson(withoutIdentity(old))===stableJson(withoutIdentity(event))));
-   if(!matches.length&&['occurredAt','model','activity'].every(key=>typeof event[key]==='string'&&event[key]))matches=records.filter(r=>r.expected.occurredAt===event.occurredAt&&r.call.model===event.model&&r.call.stage===event.activity);
+   const missing=missingIdentity(event),matches=matchRecords(event);
+   if(matches.some(r=>r.undated)){
+    if(matches.length!==1)throw Error('Legacy audit quarantine requires inspection: candidates='+matches.length+' missing=occurredAt');
+    const originalEventHash=hash(stableJson(event)),originalCallHash=hash(stableJson(matches[0].call));
+    quarantine.push({id:'audit:'+hash(stableJson({jobRunId:body.runId,originalJobHash,originalEventHash})),kind:'audit-event',jobRunId:body.runId,originalJobHash,originalEventHash,originalCallHash,originalEvent:structuredClone(event),reason:'missing_original_timestamp'});removed++;continue;
+   }
+   retained.push(event);if(!missing.length&&validTimestamp(event.occurredAt))continue;
    if(matches.length!==1)throw Error('Legacy audit identity requires inspection: candidates='+matches.length+' missing='+missing.join(','));
    patch(event,matches[0].expected);
   }
+  if(removed)deliveries.push({body,retained,reason:(body.reason?body.reason+'；':'')+'历史账本'+undated.length+'条时间缺失待核对，未计入今日费用'});
  }
+ const existing=state.matrixRuns?.quarantinedAuditEvents||[],ids=new Set(existing.map(q=>q.id)),additions=quarantine.filter(q=>{if(ids.has(q.id))return false;ids.add(q.id);return true;});
+ if(additions.length>200)throw Error('Legacy audit quarantine requires inspection: migration count exceeds 200');
  for(const {target,fields}of patches)Object.assign(target,fields);
- return patches.length;
+ for(const {body,retained,reason}of deliveries){body.usageEvents=retained;body.reason=reason;}
+ if(additions.length){state.matrixRuns||={};state.matrixRuns.quarantinedAuditEvents=[...existing,...additions];}
+ return patches.length+additions.length+deliveries.length;
 }
 function publicText(article){
  const fields=[['title',article.title],['summary',article.summary],['takeaway',article.takeaway],['caution',article.caution]];
@@ -169,7 +189,8 @@ export class MatrixRunner{
    const raw=await r.text();let result;try{result=JSON.parse(raw);}catch{throw Error('Unparseable provider response; no paid retry');}
    call.response=result;call.requestId=result.id||result.request_id;call.usage=result.usage||null;call.cost=estimateCost(call.usage,false,'qwen-plus');call.status=r.ok?'returned':'http-error';call.completedAt=this.at();
    if([401,403,404].includes(r.status))this.m.providerBlocked={at:call.completedAt,status:r.status,model:'qwen-plus'};
-   call.event=usageEvent(call);this.save();if(!r.ok)throw Error('Qwen HTTP '+r.status+'; no model fallback');
+   const providerCode=result.error?.code||result.code;if(typeof providerCode==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(providerCode))call.providerErrorCode=providerCode;
+   call.event=usageEvent(call);this.save();if(!r.ok)throw Error('Qwen HTTP '+r.status+(call.providerErrorCode?' ('+call.providerErrorCode+')':'')+'; no model fallback');
    if(result.choices?.[0]?.finish_reason!=='stop')throw Error('Incomplete provider response retained; manual inspection required');return result;
   }catch(error){if(call.status==='pending'){call.status='transport-error';call.completedAt=this.at();call.event=usageEvent(call);}call.error=this.redact(error);this.save();throw Error(stage+' failed: '+call.error);}
  }
@@ -258,8 +279,8 @@ export class MatrixRunner{
     if(verified)publishedArticles.push({slug:article.slug,url,publishedAt:slot.publishedAt,writtenAt:slot.writtenAt});
     else approvedArtifacts.push({slug:article.slug,url,status:'approved_unverified',writtenAt:article.matrix.writtenAt});
    }
-   const events=this.state.calls.map(c=>c.event||=usageEvent(c));
-   for(let offset=0;offset<Math.max(1,events.length);offset+=50)if(!await this.report({day:dayAt(this.now()),slot:1,runId:`${this.runId}-audit-${offset/50}`},'skipped',{activity:'audit',reason:'已同步历史账本，未调用模型'+(this.state.lastFailure?'；上次失败：'+this.state.lastFailure.at+' '+this.state.lastFailure.message:''),failure:this.state.lastFailure?.message,publishedArticles,approvedArtifacts,usageEvents:events.slice(offset,offset+50),lastFailure:this.state.lastFailure||null}))return {failed:true,reportPending:true};
+   const undatedCount=this.state.calls.filter(undatedLegacy).length,events=this.state.calls.filter(c=>!undatedLegacy(c)).map(c=>c.event||=usageEvent(c));
+   for(let offset=0;offset<Math.max(1,events.length);offset+=50)if(!await this.report({day:dayAt(this.now()),slot:1,runId:`${this.runId}-audit-${offset/50}`},'skipped',{activity:'audit',reason:'已同步历史账本，未调用模型'+(undatedCount?'；历史账本'+undatedCount+'条时间缺失待核对，未计入今日费用':'')+(this.state.lastFailure?'；上次失败：'+this.state.lastFailure.at+' '+this.state.lastFailure.message:''),failure:this.state.lastFailure?.message,publishedArticles,approvedArtifacts,usageEvents:events.slice(offset,offset+50),lastFailure:this.state.lastFailure||null}))return {failed:true,reportPending:true};
    console.log('Matrix audit: historical facts queued/reported; no model or deployment call.');return;
   }
   if(!duePlan(plan,this.now())){console.log('Matrix plan not due or paused; no paid call.');return;}

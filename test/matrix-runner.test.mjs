@@ -171,3 +171,22 @@ test('historical usage uses verified original alternate timestamps with provenan
  const call={...base,at:'2026-11-05T12:34:56Z',event:{provider:'DashScope / Qwen',sourceId:base.id,keyAlias:'本站云端Key',model:base.model,activity:base.stage,amountMicros:null,note:'Original'}};
  const state={calls:[call],matrixRuns:{outbox:[{body:{activity:'audit',status:'skipped',usageEvents:[{...call.event}]}}]}};repairLegacyUsage(state);const event=state.matrixRuns.outbox[0].body.usageEvents[0];assert.equal(event.occurredAt,call.at);assert.match(event.note,/原始账本 at/);assert.equal(event.amountMicros,null);assert.equal(event.sourceId,base.id);
 });
+test('undated legacy receipts are quarantined while dated audit events retain original dates and amounts',async()=>{
+ const valid={id:'dated',startedAt:'2026-11-05T12:00:00Z',model:'qwen-plus',stage:'health',status:'returned',usage:{prompt_tokens:10,completion_tokens:1},cost:{modelEstimateCny:.00001}},legacy={id:'undated',model:'qwen-plus',stage:'old-diagnostic',status:'http-error',response:{error:'preserve original encrypted response'}};
+ const badEvent={provider:'DashScope / Qwen',sourceId:legacy.id,keyAlias:'本站云端Key',model:legacy.model,activity:legacy.stage,amountMicros:null,currency:'CNY',amountKind:'unknown',status:'failed'};legacy.event={...badEvent};const validEvent=usageEvent(valid),originalLegacy=JSON.stringify(legacy);
+ const job={url:plan().reportUrl,body:{runId:'old-audit-0',activity:'audit',day:'2026-11-06',slot:1,at:'2026-11-06T01:00:00Z',status:'skipped',usageEvents:[{...validEvent},{...badEvent}]}},state={calls:[valid,legacy],matrixRuns:{days:{},outbox:[job]}},sent=[];
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>new Date('2026-11-06T02:00:00Z'),articles:()=>[],fetch:async(url,options)=>{if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};assert(!url.includes('chat/completions'));sent.push(JSON.parse(options.body));return{ok:true,status:200};}});
+ await runner.main('audit');assert.deepEqual(sent[0].usageEvents,JSON.parse(JSON.stringify([validEvent])));assert.equal(sent[0].at,'2026-11-06T01:00:00Z');assert.match(sent.at(-1).reason,/历史账本1条时间缺失待核对，未计入今日费用/);assert.equal(JSON.stringify(legacy),originalLegacy);
+ const quarantine=state.matrixRuns.quarantinedAuditEvents;assert.equal(quarantine.length,2);assert.deepEqual(quarantine.find(x=>x.kind==='call').originalCall,legacy);assert.deepEqual(quarantine.find(x=>x.kind==='audit-event').originalEvent,badEvent);assert.equal(quarantine.find(x=>x.kind==='audit-event').jobRunId,'old-audit-0');
+ assert.equal(sent.flatMap(x=>x.usageEvents).some(x=>x.occurredAt?.startsWith('2026-11-06')),false);await runner.main('audit');assert.equal(quarantine.length,2);
+});
+test('undated Matrix paid rows remain strict and cannot enter legacy quarantine',async()=>{
+ const call={id:'matrix-request',matrixDay:'2026-11-06',matrixSlot:1,articleId:'BCJ-002',model:'qwen-plus',stage:'research',status:'pending'},state={calls:[call],matrixRuns:{days:{},outbox:[]}},original=JSON.stringify(state);
+ assert.throws(()=>repairLegacyUsage(state),/timestamp.*inspection/);assert.equal(JSON.stringify(state),original);
+});
+test('provider failures expose only a short ASCII code and never a raw message',async()=>{
+ for(const code of['access_denied','unsafe code\nRAW_DONT_SHOW']){
+  const state={calls:[],batches:{}},runner=new MatrixRunner({state,save:()=>{},apiKey:'private-key',fetch:async()=>({ok:false,status:403,text:async()=>JSON.stringify({error:{code,message:'RAW_DONT_SHOW private-key'}})})});
+  await assert.rejects(runner.model('research',[],20,{day:'2026-11-06',slot:1,question:{id:'BCJ-002'}}),error=>{assert.match(error.message,/Qwen HTTP 403/);assert.equal(error.message.includes('access_denied'),code==='access_denied');assert(!error.message.includes('RAW_DONT_SHOW'));assert(!error.message.includes('private-key'));return true;});
+ }
+});
