@@ -2,14 +2,16 @@ import fs from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {loadState,persist} from './cloud-state.mjs';
 import {MatrixRunner,hash,protectArticleWrite} from './matrix-runner.mjs';
+import {loadReferenceFx} from './matrix-fx.mjs';
 
 const store=loadState();
 function command(program,args){
- const env={...process.env};for(const key of ['DASHSCOPE_API_KEY','DASHSCOPE_BASE_URL','BCJ_LEDGER_KEY','MATRIX_RUNNER_TOKEN'])delete env[key];
+ const env={...process.env};for(const key of ['DASHSCOPE_API_KEY','DASHSCOPE_BASE_URL','OPENROUTER_API_KEY','BCJ_LEDGER_KEY','MATRIX_RUNNER_TOKEN'])delete env[key];
  execFileSync(program,args,{stdio:'inherit',env});
 }
 const bankFile='content/question-bank.json';
-const runner=new MatrixRunner({state:store.state,save:()=>persist(store),run:command,recheckProvider:process.env.MATRIX_RECHECK_PROVIDER==='true',
+const fxRate=await loadReferenceFx({state:store.state,save:()=>persist(store)});
+const runner=new MatrixRunner({state:store.state,fxRate,save:()=>persist(store),run:command,recheckProvider:process.env.MATRIX_RECHECK_PROVIDER==='true',
  articles:()=>fs.readdirSync('content/articles').filter(f=>f.endsWith('.json')).map(f=>JSON.parse(fs.readFileSync('content/articles/'+f,'utf8'))),
  metadata:q=>JSON.parse(fs.readFileSync('content/topics.json','utf8')).find(a=>a.slug===q.slug),
  articleHash:slug=>fs.existsSync('content/articles/'+slug+'.json')?hash(fs.readFileSync('content/articles/'+slug+'.json')):null,

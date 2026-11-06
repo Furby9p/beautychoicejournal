@@ -4,6 +4,6 @@ export function safeSource(value){try{const u=new URL(value);return u.protocol==
 export function validateArticle(a){
  if(!a.title||!Array.isArray(a.sections)||a.sections.length<1||a.sections.some(s=>typeof s.heading!=='string'||!Array.isArray(s.paragraphs)||s.paragraphs.some(p=>typeof p!=='string'))||a.sections.flatMap(s=>s.paragraphs).join('').length<500)throw Error('正文不完整');
  if(!Array.isArray(a.sources)||a.sources.some(s=>!safeSource(s.url)||typeof s.title!=='string')||new Set(a.sources.map(s=>s.url)).size<2)throw Error('至少需要两个有效来源，且所有来源必须为安全网页');
- if(a.provider!=='dashscope'||!a.model?.startsWith('qwen'))throw Error('文章必须由千问直接生成');
+ if(!((a.provider==='dashscope'&&a.model?.startsWith('qwen'))||(a.provider==='openrouter'&&a.model==='qwen/qwen-plus')))throw Error('文章必须由已授权千问模型生成');
  return a;
 }

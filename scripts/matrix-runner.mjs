@@ -4,6 +4,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {estimateCost} from './cloud-state.mjs';
 import {commentEndpoint} from './qwen-config.mjs';
 import {validateArticle,safeSource,decodePage} from './content.mjs';
+import {PROVIDER_REVISION,OPENROUTER_ENDPOINT,openRouterConfigured,knownRejection,hasCompletion,openRouterCost,sourceAnnotations} from './matrix-providers.mjs';
 
 export const hash=value=>createHash('sha256').update(value).digest('hex');
 export function protectArticleWrite(current,desired,originalHash){
@@ -11,7 +12,7 @@ export function protectArticleWrite(current,desired,originalHash){
  if((current===null?null:hash(current))!==(originalHash??null))throw Error('Concurrent article changes protected');
 }
 class ReportNotConfirmed extends Error{}
-const ambiguousCall=call=>['pending','transport-error'].includes(call.status)||(call.status==='returned'&&call.response?.choices?.[0]?.finish_reason!=='stop');
+const ambiguousCall=call=>['pending','transport-error'].includes(call.status)||(call.status==='returned'&&(call.response?.choices?.[0]?.finish_reason!=='stop'||!hasCompletion(call.response)))||(call.status==='http-error'&&hasCompletion(call.response));
 async function reportErrorDetail(response){
  const reader=response.body?.getReader?.();if(!reader)return '';
  const chunks=[];let bytes=0;
@@ -42,7 +43,9 @@ export function usageEvent(call){
  const usage=call.usage,cost=call.cost?.modelEstimateCny;
  const requestId=String(call.requestId||'').trim(),rowId=String(call.id||'').trim(),sourceId=requestId||rowId||'legacy-ledger:'+hash(stableJson(Object.fromEntries(Object.entries(call).filter(([key])=>!['event','retryAuthorizedAt'].includes(key)))));
  const timeField=['startedAt','at','completedAt'].find(key=>validTimestamp(call[key]));if(!timeField)throw Error('Historical usage timestamp requires inspection: no verified original time');
- return {provider:'DashScope / Qwen',sourceId,keyAlias:'本站云端Key',model:call.model,occurredAt:call[timeField],inputTokens:usage?.prompt_tokens??usage?.input_tokens??null,outputTokens:usage?.completion_tokens??usage?.output_tokens??null,amountMicros:Number.isFinite(cost)?Math.round(cost*1e6):null,currency:'CNY',amountKind:Number.isFinite(cost)?'estimated':'unknown',status:['returned','validated'].includes(call.status)?'success':call.status==='http-error'?'failed':'unknown',activity:call.stage,evidence:call.cost?.priceSource,note:`公开单价估算，非供应商账单；价格核对日期 ${call.cost?.priceCheckedAt||'未知'}${call.search?'；联网搜索收费未知，不含在模型 token 估算中':''}${!requestId?'；账本记录编号，供应商请求ID缺失':''}${timeField!=='startedAt'?'；调用时间依据原始账本 '+timeField+'，开始时间缺失或无效':''}`,priceSource:call.cost?.priceSource,priceCheckedAt:call.cost?.priceCheckedAt};
+ const isOpenRouter=call.provider==='openrouter',actualUsd=call.cost?.actualUsd,converted=isOpenRouter&&Number.isFinite(cost)&&Number.isFinite(actualUsd),amount=isOpenRouter&&!converted?actualUsd:cost;
+ const note=isOpenRouter?`OpenRouter 响应 usage.cost 实际 USD ${Number.isFinite(actualUsd)?actualUsd:'未知'}${converted?`；参考汇率 ${call.cost.fxRate.rate} CNY/USD，日期 ${call.cost.fxRate.date}，来源 ${call.cost.fxRate.source}；人民币为换算估算，非人民币账单`:''}`:`公开单价估算，非供应商账单；价格核对日期 ${call.cost?.priceCheckedAt||'未知'}${call.search?'；联网搜索收费未知，不含在模型 token 估算中':''}`;
+ return {provider:isOpenRouter?'OpenRouter':'DashScope / Qwen',sourceId,keyAlias:call.keyAlias||'本站云端Key',model:call.model,occurredAt:call[timeField],inputTokens:usage?.prompt_tokens??usage?.input_tokens??null,outputTokens:usage?.completion_tokens??usage?.output_tokens??null,amountMicros:Number.isFinite(amount)?Math.round(amount*1e6):null,currency:isOpenRouter&&!converted?'USD':'CNY',amountKind:Number.isFinite(amount)?isOpenRouter&&!converted?'actual':'estimated':'unknown',status:['returned','validated'].includes(call.status)?'success':call.status==='http-error'?'failed':'unknown',activity:call.stage,evidence:call.cost?.priceSource,note:note+`${!requestId?'；账本记录编号，供应商请求ID缺失':''}${timeField!=='startedAt'?'；调用时间依据原始账本 '+timeField+'，开始时间缺失或无效':''}`,priceSource:call.cost?.priceSource,priceCheckedAt:call.cost?.priceCheckedAt};
 }
 const validTimestamp=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)&&Number.isFinite(Date.parse(value));
 const undatedLegacy=call=>!call.matrixDay&&!['startedAt','at','completedAt'].some(key=>validTimestamp(call[key]));
@@ -129,11 +132,25 @@ const trusted=url=>{if(!safeSource(url))return false;const host=new URL(url).hos
 
 export class MatrixRunner{
  constructor(options){
-  Object.assign(this,{fetch:globalThis.fetch,now:()=>new Date(),sleep:delay,origin:process.env.MATRIX_ORIGIN||'https://matrix.relaxbrohk.com',siteId:process.env.MATRIX_SITE_ID,token:process.env.MATRIX_RUNNER_TOKEN,apiKey:process.env.DASHSCOPE_API_KEY,endpoint:commentEndpoint(),runId:process.env.GITHUB_RUN_ID||'local',runUrl:process.env.GITHUB_RUN_ID?`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`:undefined},options);
+  Object.assign(this,{fetch:globalThis.fetch,now:()=>new Date(),sleep:delay,origin:process.env.MATRIX_ORIGIN||'https://matrix.relaxbrohk.com',siteId:process.env.MATRIX_SITE_ID,token:process.env.MATRIX_RUNNER_TOKEN,apiKey:process.env.DASHSCOPE_API_KEY,endpoint:commentEndpoint(),openRouterKey:process.env.OPENROUTER_API_KEY,openRouterModel:process.env.OPENROUTER_MODEL,providerRevision:process.env.MATRIX_PROVIDER_REVISION,runId:process.env.GITHUB_RUN_ID||'local',runUrl:process.env.GITHUB_RUN_ID?`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`:undefined},options);
   this.state.calls||=[];this.state.matrixRuns||={days:{},outbox:[]};this.m=this.state.matrixRuns;this.m.days||={};this.m.outbox||=[];
  }
  at(){return this.now().toISOString();}
+ migrateProviderRevision(day){
+  if(this.providerRevision!==PROVIDER_REVISION||this.m.providerMigration?.revision===PROVIDER_REVISION||!openRouterConfigured(this.openRouterKey,this.openRouterModel))return false;
+  const daily=this.m.days[day];if(!daily)return false;
+  const eligible=daily.slots.filter(slot=>{
+   const calls=this.state.calls.filter(c=>c.matrixDay===day&&c.matrixSlot===slot.slot),last=calls.at(-1);
+   return slot.phase==='failed'&&!slot.publishedAt&&!slot.deployAttemptAt&&/Qwen HTTP (401|403|404)\b/.test(slot.failure||'')&&last?.status==='http-error'&&[401,403,404].includes(last.httpStatus)&&!hasCompletion(last.response)&&!calls.some(ambiguousCall);
+  });
+  if(!eligible.length)return false;
+  for(const slot of daily.slots)if(eligible.includes(slot)||(slot.phase==='skipped'&&slot.failure==='qwen-plus permission blocked; no fallback')){
+   slot.providerMigration={revision:PROVIDER_REVISION,at:this.at(),previousPhase:slot.phase,previousFailure:slot.failure,previousRunId:slot.runId};slot.runId=`${this.runId}-${slot.slot}`;slot.phase='planned';delete slot.failure;
+  }
+  this.m.providerMigration={revision:PROVIDER_REVISION,at:this.at(),day};this.save();return true;
+ }
  authorizeProviderRecheck(day){
+  if(this.providerRevision===PROVIDER_REVISION)throw Error('Provider route migration preserves rejected primary; permission reset cannot retry it');
   if(!this.m.providerBlocked)return;
   const row=this.state.calls.findLast(c=>c.matrixDay===day&&c.status==='http-error'&&[401,403,404].includes(c.httpStatus));
   const slot=this.m.days[day]?.slots.find(s=>s.slot===row?.matrixSlot);
@@ -144,7 +161,7 @@ export class MatrixRunner{
   for(const other of this.m.days[day].slots)if(other.phase==='skipped'&&other.failure==='qwen-plus permission blocked; no fallback'){other.phase='planned';delete other.failure;}
   this.m.providerRecheck={at:this.at(),sourceId:row.requestId||row.id,runId:this.runId};delete this.m.providerBlocked;this.save();
  }
- redact(error){let message=String(error?.message||error);for(const secret of[this.token,this.apiKey,process.env.BCJ_LEDGER_KEY])if(secret)message=message.replaceAll(secret,'[redacted]');return message.slice(0,300);}
+ redact(error){let message=String(error?.message||error);for(const secret of[this.token,this.apiKey,this.openRouterKey,process.env.BCJ_LEDGER_KEY])if(secret)message=message.replaceAll(secret,'[redacted]');return message.slice(0,300);}
  logResult(result,log=console.error){
   if(result?.reportPending)log('Matrix report not confirmed: '+this.redact(this.m.reportFailure?.message||'pending encrypted outbox; no new paid work'));
   return result?.failed===true;
@@ -170,29 +187,46 @@ export class MatrixRunner{
   if(!await this.report(slot,status,extra))throw new ReportNotConfirmed(this.m.reportFailure?.message||'Matrix report not confirmed');
  }
  async model(stage,messages,maxTokens,slot,search=false){
-  const body={model:'qwen-plus',messages,enable_thinking:false,max_tokens:maxTokens,temperature:.2,response_format:{type:'json_object'},...(search?{enable_search:true,search_options:{forced_search:true,enable_source:true,enable_citation:true,search_strategy:'turbo'}}:{})};
-  if(JSON.stringify(body).length>60000)throw Error('Prompt size cap exceeded');
-  const inputHash=hash(JSON.stringify({endpoint:this.endpoint,body}));
-  const prior=this.state.calls.find(c=>c.matrixDay===slot.day&&c.matrixSlot===slot.slot&&c.stage===stage&&!c.retryAuthorizedAt);
-  if(prior){if(prior.inputHash!==inputHash||!prior.response||prior.status!=='returned')throw Error('Previous paid request requires inspection; no blind retry');if(prior.response.choices?.[0]?.finish_reason!=='stop')throw Error('Retained incomplete response; manual inspection required');return prior.response;}
+  const primaryBody={model:'qwen-plus',messages,enable_thinking:false,max_tokens:maxTokens,temperature:.2,response_format:{type:'json_object'},...(search?{enable_search:true,search_options:{forced_search:true,enable_source:true,enable_citation:true,search_strategy:'turbo'}}:{})};
+  if(!['research','write','review'].includes(stage))throw Error('Model stage limit exceeded');
+  if(!Number.isInteger(maxTokens)||maxTokens<1||maxTokens>({research:2000,write:4300,review:4200}[stage]))throw Error('Model output cap exceeded');
+  if(JSON.stringify(primaryBody).length>60000)throw Error('Prompt size cap exceeded');
+  const stageHash=hash(JSON.stringify({stage,messages,maxTokens,search}));
+  const rows=this.state.calls.filter(c=>c.matrixDay===slot.day&&c.matrixSlot===slot.slot&&c.stage===stage&&!c.retryAuthorizedAt);
+  const success=rows.find(c=>c.status==='returned'&&!ambiguousCall(c));
+  if(success){const legacyHash=hash(JSON.stringify({endpoint:success.endpoint||this.endpoint,body:primaryBody}));if(success.stageHash?success.stageHash!==stageHash:success.inputHash!==legacyHash)throw Error('Previous paid request inputs changed; manual inspection required');return success.provider==='openrouter'?sourceAnnotations(success.response):success.response;}
   if(this.state.calls.some(c=>c.articleId===slot.question.id&&ambiguousCall(c)))throw Error('Earlier ambiguous article request requires inspection across calendar days');
-  if(this.m.providerBlocked)throw Error('Provider permission blocked; explicit operator reset required');
-  if(!this.apiKey)throw Error('Qwen key unavailable');
-  if(this.state.calls.filter(c=>c.matrixDay===slot.day&&c.matrixSlot===slot.slot).length>=(slot.providerRecheckUsed?4:3))throw Error('Bounded article call limit reached');
-  const call={id:randomUUID(),matrixDay:slot.day,matrixSlot:slot.slot,articleId:slot.question.id,stage,model:'qwen-plus',inputHash,endpoint:this.endpoint,search,startedAt:this.at(),status:'pending',usage:null,cost:estimateCost(null,false,'qwen-plus')};
-  slot.startedAt||=call.startedAt;this.state.calls.push(call);this.save();
-  try{
-   const r=await this.fetch(this.endpoint,{method:'POST',headers:{Authorization:'Bearer '+this.apiKey,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(180000),redirect:'error'});
-   call.httpStatus=r.status;
-   if(!r.ok){call.status='http-error';call.completedAt=this.at();}
-   if([401,403,404].includes(r.status))this.m.providerBlocked={at:this.at(),status:r.status,model:'qwen-plus'};
-   const raw=await r.text();let result;try{result=JSON.parse(raw);}catch{throw Error('Unparseable provider response; no paid retry');}
-   call.response=result;call.requestId=result.id||result.request_id;call.usage=result.usage||null;call.cost=estimateCost(call.usage,false,'qwen-plus');call.status=r.ok?'returned':'http-error';call.completedAt=this.at();
-   if([401,403,404].includes(r.status))this.m.providerBlocked={at:call.completedAt,status:r.status,model:'qwen-plus'};
-   const providerCode=result.error?.code||result.code;if(typeof providerCode==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(providerCode))call.providerErrorCode=providerCode;
-   call.event=usageEvent(call);this.save();if(!r.ok)throw Error('Qwen HTTP '+r.status+(call.providerErrorCode?' ('+call.providerErrorCode+')':'')+'; no model fallback');
-   if(result.choices?.[0]?.finish_reason!=='stop')throw Error('Incomplete provider response retained; manual inspection required');return result;
-  }catch(error){if(call.status==='pending'){call.status='transport-error';call.completedAt=this.at();call.event=usageEvent(call);}call.error=this.redact(error);this.save();throw Error(stage+' failed: '+call.error);}
+  if(rows.some(c=>ambiguousCall(c)||c.status!=='http-error'||!knownRejection(c.httpStatus)))throw Error('Previous paid request requires inspection; no blind retry');
+  const routes=[{provider:'dashscope',key:this.apiKey,model:'qwen-plus',endpoint:this.endpoint,keyAlias:'GEO通用DashScope Key'},
+   {provider:'openrouter',key:this.openRouterKey,model:this.openRouterModel,endpoint:OPENROUTER_ENDPOINT,keyAlias:'Matrix美容站OpenRouter备用Key (GEO账户)'}];
+  let lastFailure=rows.at(-1)?.error;
+  for(const route of routes){
+   if(route.provider==='dashscope'&&(this.m.providerBlocked||rows.some(c=>(c.provider||'dashscope')==='dashscope')))continue;
+   if(route.provider==='openrouter'){
+    if(!openRouterConfigured(route.key,route.model))throw Error((lastFailure?lastFailure+'; ':'')+'OpenRouter fallback unavailable; configured cheap model required');
+    if(rows.some(c=>c.provider==='openrouter'))continue;
+    if(this.m.openRouterBlocked)throw Error('OpenRouter permission blocked; manual inspection required');
+    await this.acceptedReport(slot,{research:'researching',write:'writing',review:'reviewing'}[stage]||'researching',{reason:'Known primary rejection; authorized OpenRouter fallback'});
+   }else if(!route.key)throw Error('Qwen key unavailable');
+   const articleCalls=this.state.calls.filter(c=>c.matrixDay===slot.day&&c.matrixSlot===slot.slot),limit=6+(slot.providerMigration?1:0);
+   if(articleCalls.length>=limit)throw Error('Bounded article call limit reached');
+   const body=route.provider==='dashscope'?primaryBody:{model:route.model,messages,max_tokens:maxTokens,temperature:.2,response_format:{type:'json_object'},provider:{require_parameters:true},...(search?{plugins:[{id:'web',engine:'exa',max_results:6}]}:{})};
+   const call={id:randomUUID(),matrixDay:slot.day,matrixSlot:slot.slot,articleId:slot.question.id,stage,provider:route.provider,keyAlias:route.keyAlias,providerRevision:this.providerRevision,model:route.model,stageHash,inputHash:hash(JSON.stringify({endpoint:route.endpoint,body})),endpoint:route.endpoint,search,startedAt:this.at(),status:'pending',usage:null,cost:route.provider==='openrouter'?openRouterCost(null,this.fxRate):estimateCost(null,false,'qwen-plus')};
+   slot.startedAt||=call.startedAt;if(slot.providerMigration)slot.providerMigration.startedAt||=call.startedAt;this.state.calls.push(call);this.save();
+   try{
+    const r=await this.fetch(route.endpoint,{method:'POST',headers:{Authorization:'Bearer '+route.key,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(180000),redirect:'error'});
+    call.httpStatus=r.status;
+    const raw=await r.text();let result;try{result=JSON.parse(raw);}catch{if(r.ok)throw Error('Unparseable provider response; no paid retry');result=null;}
+    call.response=result;call.requestId=result?.id||result?.request_id;call.usage=result?.usage||null;call.cost=route.provider==='openrouter'?openRouterCost(call.usage,this.fxRate):estimateCost(call.usage,false,'qwen-plus');call.status=r.ok?'returned':'http-error';call.completedAt=this.at();
+    if([401,402,403,404].includes(r.status)){const marker={at:call.completedAt,status:r.status,model:route.model,provider:route.provider};if(route.provider==='dashscope')this.m.providerBlocked=marker;else this.m.openRouterBlocked=marker;}
+    const code=result?.error?.code||result?.code;if(typeof code==='string'&&/^[A-Za-z0-9_.-]{1,80}$/.test(code))call.providerErrorCode=code;
+    call.event=usageEvent(call);this.save();
+    if(ambiguousCall(call))throw Error('Incomplete or ambiguous provider response retained; manual inspection required');
+    if(!r.ok){call.error=(route.provider==='dashscope'?'Qwen':'OpenRouter')+' HTTP '+r.status+(call.providerErrorCode?' ('+call.providerErrorCode+')':'');this.save();if(!knownRejection(r.status))throw Error(call.error+'; inspection required');lastFailure=call.error;continue;}
+    return route.provider==='openrouter'?sourceAnnotations(result):result;
+   }catch(error){if(call.status==='pending'){call.status='transport-error';call.completedAt=this.at();call.event=usageEvent(call);}call.error=this.redact(error);this.save();throw Error(stage+' failed: '+call.error);}
+  }
+  throw Error(lastFailure||'Bounded article route attempts exhausted; inspection required');
  }
  async source(ref){
   let url=ref.url;for(let redirect=0;redirect<4;redirect++){
@@ -227,8 +261,9 @@ export class MatrixRunner{
    const out=parse(result.choices[0].message.content);if(out.slug!==q.slug)throw Error('Article slug mismatch');
    if(/千问|qwen|AI\s*辅助|模型生成|非亲测|我亲测|亲自体验|用户一致好评/i.test(JSON.stringify(out)))throw Error('Disallowed production or invented experience claim');
    const sections=out.sections?.map(s=>({heading:s.heading,paragraphs:s.paragraphs}));
+   const writer=this.state.calls.findLast(c=>c.matrixDay===slot.day&&c.matrixSlot===slot.slot&&c.stage==='write'&&c.status==='returned');
    const original=this.metadata?.(q)||{slug:q.slug,category:q.category,cover:['化妆技巧','彩妆选物'].includes(q.category)?'makeup':q.category==='美容仪'?'device':'skincare',label:q.question,tags:[q.category]};
-   slot.article=validateArticle({...original,slug:q.slug,title:out.title,summary:out.summary,takeaway:out.takeaway,sections,tips:out.tips,caution:out.caution,sources:slot.sources.map(({text,...s})=>s),provider:'dashscope',model:'qwen-plus',author:'美妆选物志编辑部',publicationStatus:'draft',reviewStatus:'pending_review'});
+   slot.article=validateArticle({...original,slug:q.slug,title:out.title,summary:out.summary,takeaway:out.takeaway,sections,tips:out.tips,caution:out.caution,sources:slot.sources.map(({text,...s})=>s),provider:writer?.provider||'dashscope',model:writer?.model||'qwen-plus',author:'美妆选物志编辑部',publicationStatus:'draft',reviewStatus:'pending_review'});
    slot.writtenAt=this.at();this.save();
   }
   if(!slot.review){
@@ -288,6 +323,7 @@ export class MatrixRunner{
   if(!duePlan(plan,this.now())){console.log('Matrix plan not due or paused; no paid call.');return;}
   const day=dayAt(this.now());
   if(this.state.calls.some(c=>c.matrixDay&&ambiguousCall(c)))throw Error('Unresolved ambiguous provider request requires inspection before another paid batch');
+  this.migrateProviderRevision(day);
   if(this.recheckProvider===true)this.authorizeProviderRecheck(day);
   const recent=(plan.recentReports||[]).filter(r=>r.day===day),completed=new Map();
   for(const r of recent.filter(r=>r.status==='published'))for(const id of r.articleIds||[])completed.set(id,r);
@@ -306,10 +342,11 @@ export class MatrixRunner{
   for(const slot of daily.slots){
    if(['published','failed','skipped'].includes(slot.phase))continue;
    const fresh=await this.plan();if(!duePlan(fresh,this.now())||dayAt(this.now())!==day)return;
-   if(this.m.providerBlocked){slot.phase='skipped';slot.failure='qwen-plus permission blocked; no fallback';this.save();if(!await this.report(slot,'skipped',{failure:slot.failure}))return {failed:true,reportPending:true};continue;}
+   if(this.m.providerBlocked&&!openRouterConfigured(this.openRouterKey,this.openRouterModel)){slot.phase='skipped';slot.failure='qwen-plus permission blocked; no fallback';this.save();if(!await this.report(slot,'skipped',{failure:slot.failure}))return {failed:true,reportPending:true};continue;}
    if(slot.slot===2){
     const first=daily.slots[0],gap=Math.max(10,Number(fresh.daily.articleGapMinutes)||10)*60000;
-    if(first.startedAt){while(this.now().getTime()<Date.parse(first.startedAt)+gap){await this.sleep(Math.min(30000,Date.parse(first.startedAt)+gap-this.now().getTime()));if(dayAt(this.now())!==day)return;const latest=await this.plan();if(!duePlan(latest,this.now()))return;}}
+    const firstStart=first.providerMigration?.startedAt||first.startedAt;
+    if(firstStart){while(this.now().getTime()<Date.parse(firstStart)+gap){await this.sleep(Math.min(30000,Date.parse(firstStart)+gap-this.now().getTime()));if(dayAt(this.now())!==day)return;const latest=await this.plan();if(!duePlan(latest,this.now()))return;}}
    }
    try{const result=await this.publish(slot,{...fresh,writing:daily.snapshot.writing});if(result?.paused)return;}
    catch(e){
