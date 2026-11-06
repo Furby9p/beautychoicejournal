@@ -1,0 +1,128 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {dayAt, duePlan, selectQuestions, usageEvent, validateReview, protectArticleWrite, hash, MatrixRunner} from '../scripts/matrix-runner.mjs';
+
+const plan=()=>({site:{id:'beauty',domain:'beautychoicejournal.com'},daily:{enabled:true,quota:2,time:'09:07',timezone:'Asia/Shanghai',publishMode:'auto',articleGapMinutes:10,startDate:'2026-11-06'},writing:{ready:true,instructions:[{id:'skill',name:'Beauty',version:'1',instructions:'Beauty instructions',resources:[]}],questionSets:[{id:'bank',questions:[{id:'BCJ-002',slug:'led-mask-guide',question:'LED?',category:'美容仪',status:'pending'},{id:'BCJ-003',slug:'microcurrent-guide',question:'Microcurrent?',category:'美容仪',status:'planned'}]}]},reportUrl:'https://matrix.relaxbrohk.com/api/runner/report/beauty',searchUrl:'https://matrix.relaxbrohk.com/api/runner/search/beauty'});
+test('Shanghai schedule, disabled, future start and exact two quota are enforced',()=>{
+ assert.equal(dayAt('2026-11-05T17:00:00Z'),'2026-11-06');
+ assert.equal(duePlan(plan(),'2026-11-06T01:06:59Z'),false);
+ assert.equal(duePlan(plan(),'2026-11-06T01:07:00Z'),true);
+ for(const patch of [{enabled:false},{quota:3},{publishMode:'review'},{startDate:'2026-11-07'},{timezone:'UTC'}]){const p=plan();Object.assign(p.daily,patch);assert.equal(duePlan(p,'2026-11-06T02:00:00Z'),false);}
+});
+test('Matrix snapshot is authoritative and published/local existing questions excluded',()=>{
+ assert.deepEqual(selectQuestions(plan(),[{slug:'led-mask-guide',publicationStatus:'published',reviewStatus:'approved'}]).map(x=>x.id),['BCJ-003']);
+ const p=plan();p.writing.questionSets[0].questions[0].slug='../unsafe';assert.throws(()=>selectQuestions(p,[]));
+});
+test('unknown usage is not zero and final usage events keep provider ID',()=>{
+ const call={id:'reserved',model:'qwen-plus',stage:'research',status:'transport-error',startedAt:'2026-11-06T01:07:00Z'};
+ assert.equal(usageEvent(call).amountMicros,null);assert.equal(usageEvent(call).status,'unknown');
+ call.status='returned';call.requestId='provider-id';call.usage={prompt_tokens:1000,completion_tokens:100};call.cost={modelEstimateCny:.001};
+ assert.equal(usageEvent(call).sourceId,'provider-id');assert.equal(usageEvent(call).amountMicros,1000);
+});
+test('review rejects uncited facts, forged quotations and omitted summaries',()=>{
+ const a={slug:'test',title:'标题',summary:'建议先核对',takeaway:'建议先看说明',sections:[{heading:'选择',paragraphs:['事实[1]']}],tips:[],caution:'建议核对说明'};
+ const sources=[{text:'A sufficiently long quotation from the original source.'}];
+ const review={slug:'test',approved:true,decisionGain:'明确可执行的选购判断和检查动作',issues:[],checks:['title','summary','takeaway','sections.0.heading','sections.0.paragraphs.0','caution'].map(target=>({target,kind:target==='sections.0.paragraphs.0'?'supported':'editorial',sourceId:1,quote:sources[0].text}))};
+ assert.throws(()=>validateReview(a,review,sources));
+ a.title='建议核对标题';a.sections[0].heading='建议先选择';assert.doesNotThrow(()=>validateReview(a,review,sources));
+ review.checks.pop();assert.throws(()=>validateReview(a,review,sources));
+});
+test('audit reports history with original dates and never calls model or deployment',async()=>{
+ const posted=[];const state={calls:[],batches:{},lastFailure:{at:'2026-11-05T00:00:00Z',message:'Permission denied'}};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>new Date('2026-11-06T02:00:00Z'),fetch:async(url,options)=>{if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};posted.push(JSON.parse(options.body));return{ok:true,status:200};},articles:()=>[{slug:'old',publishedAt:'2026-11-05',publicationStatus:'published',reviewStatus:'approved'}],run:()=>{throw Error('must not deploy');}});
+ await runner.main('audit');assert.equal(posted.length,1);assert.equal(posted[0].publishedAt,undefined);assert.equal(posted[0].publishedArticles[0].publishedAt,'2026-11-05');assert.equal(posted[0].failure,'Permission denied');
+});
+test('ambiguous paid call cannot be blindly retried and report failure cannot regenerate',async()=>{
+ const state={calls:[],batches:{}};let calls=0;const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',fetch:async()=>{calls++;throw Error('timeout');},endpoint:'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',apiKey:'test'});
+ const slot={day:'2026-11-06',slot:1,question:{id:'BCJ-002'}};
+ await assert.rejects(runner.model('write',[],100,slot));await assert.rejects(runner.model('write',[],100,slot),/inspection/);assert.equal(calls,1);assert.equal(state.calls[0].status,'transport-error');
+});
+test('report outages preserve exact finalized events and retry reports without paid requests',async()=>{
+ const state={calls:[],batches:{}};let available=false;const posts=[];
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',fetch:async(url,options)=>{posts.push(options.body);return{ok:available,status:available?200:503};}});runner.currentPlan=plan();
+ const call={id:'call1',matrixDay:'2026-11-06',matrixSlot:1,stage:'write',model:'qwen-plus',startedAt:'2026-11-06T01:07:00Z',status:'http-error'};state.calls.push(call);
+ await runner.report({day:'2026-11-06',slot:1},'failed',{failure:'403'});assert.equal(state.matrixRuns.outbox.length,1);
+ available=true;await runner.flush();assert.equal(posts[0],posts[1]);assert.equal(state.matrixRuns.outbox.length,0);assert.equal(state.calls.length,1);
+});
+test('two slots start ten minutes apart and a repeated due run is free',async()=>{
+ let time=Date.parse('2026-11-06T01:07:00Z');const starts=[],state={calls:[],batches:{}};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>new Date(time),sleep:async ms=>{time+=ms;},articles:()=>[],fetch:async()=>({ok:true,json:async()=>plan()})});
+ runner.publish=async slot=>{slot.startedAt=new Date(time).toISOString();starts.push(time);slot.phase='published';slot.publishedAt=slot.startedAt;};
+ await runner.main('publish');assert.equal(starts.length,2);assert.ok(starts[1]-starts[0]>=600000);
+ await runner.main('publish');assert.equal(starts.length,2);
+});
+test('one qwen-plus 403 blocks the second slot and never falls back',async()=>{
+ let time=Date.parse('2026-11-06T01:07:00Z'),paid=0;const models=[],state={calls:[],batches:{}};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',apiKey:'test',now:()=>new Date(time),sleep:async ms=>{time+=ms;},articles:()=>[],fetch:async(url,options)=>{
+  if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};
+  if(url.includes('chat/completions')){paid++;models.push(JSON.parse(options.body).model);return{ok:false,status:403,text:async()=>JSON.stringify({error:{code:'access_denied'}})};}
+  return{ok:true,status:200};
+ }});
+ const result=await runner.main('publish');assert.equal(result.failed,true);assert.equal(paid,1);assert.deepEqual(models,['qwen-plus']);assert.equal(state.matrixRuns.days['2026-11-06'].slots[1].phase,'skipped');
+});
+test('paused plan consumes no paid request and no day slot',async()=>{
+ const p=plan();p.daily.enabled=false;const state={calls:[],batches:{}};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>new Date('2026-11-06T02:00:00Z'),fetch:async()=>({ok:true,json:async()=>p})});
+ await runner.main('publish');assert.deepEqual(state.matrixRuns.days,{});assert.equal(state.calls.length,0);
+});
+test('Matrix recent successes enforce quota even without local day state',async()=>{
+ const p=plan();p.recentReports=[{day:'2026-11-06',status:'published',articleIds:['BCJ-002'],slot:1,publishedAt:'2026-11-06T01:08:00Z'},{day:'2026-11-06',status:'published',articleIds:['BCJ-003'],slot:2,publishedAt:'2026-11-06T01:20:00Z'}];
+ const state={calls:[],batches:{}};const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>new Date('2026-11-06T02:00:00Z'),articles:()=>[],fetch:async()=>({ok:true,json:async()=>p})});
+ runner.publish=()=>{throw Error('quota already fulfilled');};await runner.main('publish');assert.equal(state.calls.length,0);assert.deepEqual(state.matrixRuns.days,{});
+});
+test('explicit permission recheck preserves old receipt and grants only one bounded retry',()=>{
+ const slot={day:'2026-11-06',slot:1,phase:'failed',question:{id:'BCJ-002'}},call={id:'old',matrixDay:slot.day,matrixSlot:1,status:'http-error',httpStatus:403,event:{sourceId:'old',amountMicros:null}};
+ const state={calls:[call],matrixRuns:{days:{[slot.day]:{slots:[slot]}},outbox:[],providerBlocked:{status:403}}};
+ const runner=new MatrixRunner({state,save:()=>{}});runner.authorizeProviderRecheck(slot.day);assert.equal(slot.phase,'planned');assert.equal(state.matrixRuns.providerBlocked,undefined);assert.equal(call.status,'http-error');assert.deepEqual(call.event,{sourceId:'old',amountMicros:null});
+ state.matrixRuns.providerBlocked={status:403};assert.throws(()=>runner.authorizeProviderRecheck(slot.day),/already used/);
+ call.status='transport-error';call.httpStatus=undefined;slot.providerRecheckUsed=false;assert.throws(()=>runner.authorizeProviderRecheck(slot.day),/permission/);
+});
+test('ambiguous Hosting release stops the next slot and next day without paid regeneration',async()=>{
+ let now=new Date('2026-11-06T02:00:00Z'),attempts=0;const state={calls:[],batches:{}};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>now,articles:()=>[],fetch:async url=>url.includes('/plan/')?{ok:true,json:async()=>plan()}:{ok:true,status:200}});
+ runner.publish=async slot=>{attempts++;slot.deployAttemptAt=now.toISOString();throw Error('Hosting response lost');};
+ assert.equal((await runner.main('publish')).failed,true);assert.equal(attempts,1);
+ await assert.rejects(runner.main('publish'),/Ambiguous release/);now=new Date('2026-11-07T02:00:00Z');await assert.rejects(runner.main('publish'),/Unresolved earlier/);assert.equal(attempts,1);
+});
+test('Matrix report 403/409 reservations and an unflushed outbox block all paid work',async()=>{
+ for(const status of [403,409])for(const queued of [false,true]){
+  let paid=0;const state={calls:[],matrixRuns:{days:{},outbox:queued?[{url:plan().reportUrl,body:{runId:'old',status:'researching'}}]:[]}};
+  const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',apiKey:'test',now:()=>new Date('2026-11-06T02:00:00Z'),articles:()=>[],fetch:async url=>{
+   if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};if(url.includes('chat/completions'))paid++;return{ok:false,status};
+  }});
+  const result=await runner.main('publish');assert.equal(paid,0);assert.equal(result.reportPending,true);assert.equal(state.calls.length,0);assert.equal(state.matrixRuns.outbox.length,1);assert.equal(state.matrixRuns.reportFailure.requiresInspection,true);
+ }
+});
+test('a 503 after research resumes its exact outbox and cached result without another research call',async()=>{
+ const p=plan(),state={calls:[],batches:{}},paid={research:0,write:0,review:0},posts=[];let outage=true;
+ const quote='A sufficiently long quotation from the opened original source.';
+ const article={slug:'led-mask-guide',title:'LED红光面罩值得买吗？',summary:'建议先核对说明',takeaway:'建议先核对说明',sections:[{heading:'选购前的三个问题',paragraphs:['建议先核对具体产品的适用条件。'.repeat(40)+'[1]']}],tips:[],caution:'建议先核对说明'};
+ const review={slug:article.slug,approved:true,decisionGain:'提供明确可执行的选购条件与核对顺序',issues:[],checks:['title','summary','takeaway','sections.0.heading','sections.0.paragraphs.0','caution'].map(target=>({target,kind:target==='sections.0.paragraphs.0'?'supported':'editorial',sourceId:1,quote}))};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',apiKey:'test',now:()=>new Date('2026-11-06T02:00:00Z'),articles:()=>[],run:()=>{},writeArticle:()=>{},markPublished:()=>{},commitContent:()=>{},fetch:async(url,options)=>{
+  if(url.includes('/plan/'))return{ok:true,json:async()=>p};
+  if(url.includes('chat/completions')){const body=JSON.parse(options.body),stage=body.enable_search?'research':body.messages[0].content.includes('Write only the exact')?'write':'review';paid[stage]++;const content=stage==='research'?{urls:[{url:'https://www.aad.org/one'},{url:'https://www.fda.gov/two'}]}:stage==='write'?article:review;return{ok:true,status:200,text:async()=>JSON.stringify({id:'provider-'+stage,usage:{prompt_tokens:100,completion_tokens:100},choices:[{finish_reason:'stop',message:{content:JSON.stringify(content)}}]})};}
+  if(url.includes('/report/')){posts.push(options.body);const body=JSON.parse(options.body);return{ok:!(outage&&body.status==='writing'),status:outage&&body.status==='writing'?503:200};}
+  if(url.includes('/search/'))p.daily.enabled=false;return{ok:true,status:200};
+ }});
+ runner.source=async ref=>({...ref,title:'Original',text:quote,checkedAt:runner.at(),textHash:ref.url,contentHash:ref.url});runner.verifyLive=async slot=>{slot.contentHashes={['https://beautychoicejournal.com/notes/'+slot.question.slug+'/']:'a'.repeat(64)};return true;};
+ const first=await runner.main('publish');assert.equal(first.reportPending,true);assert.deepEqual(paid,{research:1,write:0,review:0});assert.equal(state.matrixRuns.days['2026-11-06'].slots[0].phase,'planned');const original=state.matrixRuns.outbox[0].body;outage=false;
+ await runner.main('publish');assert.ok(posts.filter(text=>text===JSON.stringify(original)).length>=2);assert.deepEqual(paid,{research:1,write:1,review:1});assert.equal(state.matrixRuns.outbox.length,0);assert.equal(state.matrixRuns.days['2026-11-06'].slots[0].phase,'published');
+});
+test('article byte comparison protects owner edits that retain the same Matrix snapshot',()=>{
+ const original='{"matrix":{"snapshotHash":"same"},"title":"Original"}',edited=original.replace('Original','Owner edit'),desired=original.replace('Original','Generated');
+ assert.throws(()=>protectArticleWrite(edited,desired,hash(original)),/Concurrent/);assert.doesNotThrow(()=>protectArticleWrite(original,desired,hash(original)));assert.doesNotThrow(()=>protectArticleWrite(desired,desired,hash(original)));assert.throws(()=>protectArticleWrite(edited,desired,null));
+});
+test('transport ambiguity stops slot two and blocks the same question next day',async()=>{
+ let now=new Date('2026-11-06T02:00:00Z'),paid=0;const state={calls:[],batches:{}};
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',apiKey:'test',now:()=>now,articles:()=>[],fetch:async url=>{
+  if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};if(url.includes('chat/completions')){paid++;throw Error('response lost');}return{ok:true,status:200};
+ }});
+ assert.equal((await runner.main('publish')).failed,true);assert.equal(paid,1);now=new Date('2026-11-07T02:00:00Z');await assert.rejects(runner.main('publish'),/ambiguous|inspection/i);assert.equal(paid,1);
+});
+test('audit does not claim an approved Matrix artifact was published without verified ledger proof',async()=>{
+ const posted=[],article={slug:'led-mask-guide',publishedAt:'2026-11-06T01:07:00Z',publicationStatus:'published',reviewStatus:'approved',matrix:{questionId:'BCJ-002',snapshotHash:'snapshot'}};
+ const state={calls:[],batches:{}};const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>new Date('2026-11-06T02:00:00Z'),articles:()=>[article],fetch:async(url,options)=>{
+  if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};posted.push(JSON.parse(options.body));return{ok:true,status:200};
+ }});
+ await runner.main('audit');assert.deepEqual(posted[0].publishedArticles,[]);assert.equal(posted[0].approvedArtifacts[0].slug,article.slug);
+});

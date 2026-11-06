@@ -1,17 +1,21 @@
-name: Beauty daily pair
+name: Beauty Matrix daily writer and development comments
 on:
   schedule:
-    - cron: '0 18 * * *'
+    - cron: '7,37 * * * *'
     - cron: '0 21 * * *'
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Audit existing deployment or publish the daily pair'
+        description: 'Audit historical usage, follow Matrix plan, or release development comments'
         type: choice
         options: [audit, publish, comments]
         default: audit
       recheck_comments:
         description: Recheck cheap model after provider permissions are fixed
+        type: boolean
+        default: false
+      recheck_provider:
+        description: 'Retry one known same-day Plus permission rejection after correcting provider access'
         type: boolean
         default: false
 permissions:
@@ -24,7 +28,7 @@ jobs:
   publish:
     if: github.repository == 'Furby9p/beautychoicejournal' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -49,5 +53,14 @@ jobs:
           DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
           BCJ_COMMENT_RECHECK: ${{ inputs.recheck_comments && 'true' || 'false' }}
           BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
+          MATRIX_RUNNER_TOKEN: ${{ secrets.MATRIX_RUNNER_TOKEN }}
+          MATRIX_SITE_ID: ${{ secrets.MATRIX_SITE_ID }}
+          MATRIX_ORIGIN: https://matrix.relaxbrohk.com
+          MATRIX_RECHECK_PROVIDER: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'publish' && inputs.recheck_provider && 'true' || 'false' }}
           BCJ_MODE: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 21 * * *' && 'comments' || 'publish') || inputs.mode }}
-        run: node scripts/cloud-daily.mjs "$BCJ_MODE"
+        run: |
+          if [ "$BCJ_MODE" = "comments" ]; then
+            node scripts/cloud-daily.mjs comments
+          else
+            node scripts/matrix-daily.mjs "$BCJ_MODE"
+          fi
