@@ -31,7 +31,7 @@ test('review rejects uncited facts, forged quotations and omitted summaries',()=
 test('audit reports history with original dates and never calls model or deployment',async()=>{
  const posted=[];const state={calls:[],batches:{},lastFailure:{at:'2026-11-05T00:00:00Z',message:'Permission denied'}};
  const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',now:()=>new Date('2026-11-06T02:00:00Z'),fetch:async(url,options)=>{if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};posted.push(JSON.parse(options.body));return{ok:true,status:200};},articles:()=>[{slug:'old',publishedAt:'2026-11-05',publicationStatus:'published',reviewStatus:'approved'}],run:()=>{throw Error('must not deploy');}});
- await runner.main('audit');assert.equal(posted.length,1);assert.equal(posted[0].publishedAt,undefined);assert.equal(posted[0].publishedArticles[0].publishedAt,'2026-11-05');assert.equal(posted[0].failure,'Permission denied');
+ await runner.main('audit');assert.equal(posted.length,1);assert.equal(posted[0].publishedAt,undefined);assert.equal(posted[0].publishedArticles[0].publishedAt,'2026-11-05');assert.equal(posted[0].failure,undefined);assert.match(posted[0].reason,/Permission denied/);
 });
 test('ambiguous paid call cannot be blindly retried and report failure cannot regenerate',async()=>{
  const state={calls:[],batches:{}};let calls=0;const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',fetch:async()=>{calls++;throw Error('timeout');},endpoint:'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',apiKey:'test'});
