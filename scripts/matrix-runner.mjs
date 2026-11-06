@@ -12,6 +12,16 @@ export function protectArticleWrite(current,desired,originalHash){
 }
 class ReportNotConfirmed extends Error{}
 const ambiguousCall=call=>['pending','transport-error'].includes(call.status)||(call.status==='returned'&&call.response?.choices?.[0]?.finish_reason!=='stop');
+async function reportErrorDetail(response){
+ const reader=response.body?.getReader?.();if(!reader)return '';
+ const chunks=[];let bytes=0;
+ try{
+  while(bytes<4096){const part=await reader.read();if(part.done)break;const bounded=part.value.subarray(0,4096-bytes);chunks.push(bounded);bytes+=bounded.length;}
+  const data=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  return [...new Set([data.code,data.error?.code,typeof data.error==='string'?data.error:undefined,data.error?.message,data.message].filter(value=>typeof value==='string'&&value.trim()))].join(': ').replace(/[\u0000-\u001f\u007f]/g,' ');
+ }catch{return '';}
+ finally{try{await reader.cancel();}catch{}}
+}
 const parse=text=>JSON.parse(text.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));
 const pending=new Set(['planned','pending']);
 export function dayAt(date=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(date));}
@@ -82,6 +92,10 @@ export class MatrixRunner{
   this.m.providerRecheck={at:this.at(),sourceId:row.requestId||row.id,runId:this.runId};delete this.m.providerBlocked;this.save();
  }
  redact(error){let message=String(error?.message||error);for(const secret of[this.token,this.apiKey,process.env.BCJ_LEDGER_KEY])if(secret)message=message.replaceAll(secret,'[redacted]');return message.slice(0,300);}
+ logResult(result,log=console.error){
+  if(result?.reportPending)log('Matrix report not confirmed: '+this.redact(this.m.reportFailure?.message||'pending encrypted outbox; no new paid work'));
+  return result?.failed===true;
+ }
  async plan(){
   const origin=new URL(this.origin);if(origin.protocol!=='https:'||origin.username||origin.password||origin.port||origin.pathname!=='/')throw Error('Invalid Matrix origin');
   if(!this.siteId||!this.token)throw Error('Missing Matrix runner configuration');
@@ -92,7 +106,7 @@ export class MatrixRunner{
   this.currentPlan=plan;return plan;
  }
  async flush(){
-  while(this.m.outbox.length){const job=this.m.outbox[0];let status;try{const r=await this.fetch(job.url,{method:'POST',headers:{Authorization:'Bearer '+this.token,'Content-Type':'application/json'},body:JSON.stringify(job.body),signal:AbortSignal.timeout(20000),redirect:'error'});status=r.status;if(!r.ok)throw Error('Matrix report HTTP '+r.status);this.m.outbox.shift();delete this.m.reportFailure;this.save();}catch(e){this.m.reportFailure={at:this.at(),message:this.redact(e),...(status?{status}:{}),requiresInspection:!!status&&status>=400&&status<500&&status!==429};this.save();return false;}}
+  while(this.m.outbox.length){const job=this.m.outbox[0];let status;try{const r=await this.fetch(job.url,{method:'POST',headers:{Authorization:'Bearer '+this.token,'Content-Type':'application/json'},body:JSON.stringify(job.body),signal:AbortSignal.timeout(20000),redirect:'error'});status=r.status;if(!r.ok){const detail=await reportErrorDetail(r);throw Error('Matrix report HTTP '+r.status+(detail?': '+detail:''));}this.m.outbox.shift();delete this.m.reportFailure;this.save();}catch(e){this.m.reportFailure={at:this.at(),message:this.redact(e),...(status?{status}:{}),requiresInspection:!!status&&status>=400&&status<500&&status!==429};this.save();return false;}}
   return true;
  }
  async report(slot,status,extra={}){

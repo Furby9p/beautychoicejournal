@@ -126,3 +126,16 @@ test('audit does not claim an approved Matrix artifact was published without ver
  }});
  await runner.main('audit');assert.deepEqual(posted[0].publishedArticles,[]);assert.equal(posted[0].approvedArtifacts[0].slug,article.slug);
 });
+test('Matrix report errors retain bounded sanitized JSON detail and log a redacted pending failure',async()=>{
+ const token='matrix-token-private',key='provider-key-private',state={calls:[],batches:{}},logs=[];
+ const runner=new MatrixRunner({state,save:()=>{},token,apiKey:key,fetch:async()=>new Response(JSON.stringify({error:{code:'USAGE_CONFLICT',message:`Conflicting usage event; token ${token}; key ${key}`},payload:{secret:'full-report-must-not-appear'}}),{status:409,headers:{'content-type':'application/json'}})});runner.currentPlan=plan();
+ const accepted=await runner.report({day:'2026-11-06',slot:1},'skipped');assert.equal(accepted,false);const original=JSON.stringify(state.matrixRuns.outbox);
+ assert.match(state.matrixRuns.reportFailure.message,/409.*USAGE_CONFLICT.*Conflicting usage event/);assert.equal(state.matrixRuns.reportFailure.requiresInspection,true);
+ assert.equal(runner.logResult({failed:true,reportPending:true},text=>logs.push(text)),true);assert.equal(logs.length,1);assert.match(logs[0],/Matrix report not confirmed.*409/);
+ for(const text of[JSON.stringify(state.matrixRuns.reportFailure),...logs]){assert(!text.includes(token));assert(!text.includes(key));assert(!text.includes('full-report-must-not-appear'));}
+ assert.equal(JSON.stringify(state.matrixRuns.outbox),original);
+});
+test('oversize or non-JSON Matrix error bodies are not printed',async()=>{
+ const state={calls:[],batches:{}};const runner=new MatrixRunner({state,save:()=>{},fetch:async()=>new Response('x'.repeat(100000)+'secret-tail',{status:503})});runner.currentPlan=plan();
+ await runner.report({day:'2026-11-06',slot:1},'skipped');assert.equal(state.matrixRuns.reportFailure.message,'Matrix report HTTP 503');assert.equal(state.matrixRuns.outbox.length,1);
+});

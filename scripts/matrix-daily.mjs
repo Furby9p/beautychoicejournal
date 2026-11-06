@@ -36,7 +36,7 @@ const runner=new MatrixRunner({state:store.state,save:()=>persist(store),run:com
   execFileSync('git',['push','origin','HEAD:main'],{stdio:'ignore'});
  }
 });
-try{const result=await runner.main(process.argv[2]||'audit');if(result?.failed)process.exitCode=1;}
+try{if(runner.logResult(await runner.main(process.argv[2]||'audit')))process.exitCode=1;}
 catch(error){
  const message=runner.redact(error);store.state.lastFailure={at:new Date().toISOString(),message};
  try{persist(store);if(runner.currentPlan)await runner.report({day:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai'}).format(new Date()),slot:1},'failed',{failure:message});}catch{}
