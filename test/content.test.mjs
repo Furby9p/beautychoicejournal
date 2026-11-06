@@ -11,8 +11,9 @@ test('HTML and unsafe reference links cannot execute',()=>{
  for(const u of ['javascript:alert(1)','http://127.0.0.1','https://user:pass@example.com','https://localhost/a'])assert.equal(safeSource(u),false);
  assert.equal(safeSource('https://www.aad.org/public'),true);
 });
-test('article provenance permits only the approved OpenRouter Qwen Plus pair',()=>{
+test('article provenance accepts both approved OpenRouter Qwen generations and rejects other pairs',()=>{
  const article={title:'建议先核对',sections:[{heading:'步骤',paragraphs:['建议先核对具体说明。'.repeat(100)]}],sources:[{url:'https://www.aad.org/a',title:'AAD'},{url:'https://www.fda.gov/b',title:'FDA'}],provider:'openrouter',model:'qwen/qwen-plus'};
  assert.equal(validateArticle(article),article);
- for(const patch of[{model:'qwen/qwen-max'},{model:'other/model'},{provider:'unknown'}])assert.throws(()=>validateArticle({...article,...patch}));
+ for(const model of ['qwen/qwen-plus','qwen/qwen3.7-plus'])assert.doesNotThrow(()=>validateArticle({...article,model}));
+ for(const patch of[{model:'qwen/qwen-max'},{model:'qwen/qwen3.7-max'},{model:'qwen/qwen3.7-plus:free'},{model:'other/model'},{provider:'unknown'},{provider:'unknown',model:'qwen/qwen3.7-plus'}])assert.throws(()=>validateArticle({...article,...patch}));
 });

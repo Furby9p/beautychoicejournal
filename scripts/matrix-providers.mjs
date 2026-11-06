@@ -1,6 +1,6 @@
 export const PROVIDER_REVISION='geo-shared-openrouter-v1';
 export const OPENROUTER_ENDPOINT='https://openrouter.ai/api/v1/chat/completions';
-export const openRouterConfigured=(key,model)=>!!key&&model==='qwen/qwen-plus';
+export const openRouterConfigured=(key,model)=>!!key&&['qwen/qwen-plus','qwen/qwen3.7-plus'].includes(model);
 export const knownRejection=status=>[401,402,403,404,429].includes(status)||(status>=500&&status<=599);
 export const hasCompletion=result=>!!result?.choices?.some(choice=>choice.message?.content||choice.delta?.content);
 export function openRouterCost(usage,fxRate){

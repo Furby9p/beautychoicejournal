@@ -52,9 +52,9 @@ jobs:
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           DASHSCOPE_BASE_URL: ${{ secrets.DASHSCOPE_BASE_URL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENROUTER_MODEL: qwen/qwen-plus
+          OPENROUTER_MODEL: qwen/qwen3.7-plus
           MATRIX_PROVIDER_REVISION: geo-shared-openrouter-v1
-          MATRIX_CONTENT_REVISION: beauty-evidence-v2
+          MATRIX_CONTENT_REVISION: beauty-evidence-v3
           BCJ_COMMENT_RECHECK: ${{ inputs.recheck_comments && 'true' || 'false' }}
           BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
           MATRIX_RUNNER_TOKEN: ${{ secrets.MATRIX_RUNNER_TOKEN }}
