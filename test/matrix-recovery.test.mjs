@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MatrixRunner,hash,validateFactPack} from '../scripts/matrix-runner.mjs';
+import {MatrixRunner,hash,validateFactPack,selectVerifiedFacts} from '../scripts/matrix-runner.mjs';
 
 const quote='The original manufacturer instruction contains this sufficiently long source quotation.';
 const question={id:'BCJ-002',slug:'led-mask-guide',question:'LED红光面罩值得买吗？',category:'美容仪'};
@@ -56,7 +56,7 @@ test('grounded composition requires literal source quotations and two source ide
 
 test('grounded recovery composes from verified facts without feeding the rejected old draft back into writer',async()=>{
  const s={...slot(),sources:sources(),contentRecovery:{revision:'beauty-evidence-v2',sourcesChecked:true},article:{...article(),summary:'OLD_UNSUPPORTED_ASSERTION'},review:{approved:false,issues:['Unsupported old claim']},revisedAt:'2026-11-06T06:41:00Z'},pack={facts:[1,2,1,2].map(sourceId=>({sourceId,quote,claim:'可核对的中文事实',scope:'原文范围'}))},{runner,state}=setup({contentRevision:'beauty-evidence-v2'}),stages=[];
- runner.model=async(stage,messages)=>{stages.push(stage);if(stage==='write-grounded'){assert(!JSON.stringify(messages).includes('OLD_UNSUPPORTED_ASSERTION'));assert(JSON.stringify(messages).includes('可核对的中文事实'));}state.calls.push({matrixDay:s.day,matrixSlot:1,stage,status:'returned',provider:'openrouter',model:'qwen/qwen-plus'});return{choices:[{message:{content:JSON.stringify(stage==='evidence-extract'?pack:stage==='write-grounded'?article():approved())}}]};};
+ runner.model=async(stage,messages)=>{stages.push(stage);if(stage==='write-grounded'){assert(!JSON.stringify(messages).includes('OLD_UNSUPPORTED_ASSERTION'));assert(JSON.stringify(messages).includes(quote));assert(!JSON.stringify(messages).includes('可核对的中文事实'));}state.calls.push({matrixDay:s.day,matrixSlot:1,stage,status:'returned',provider:'openrouter',model:'qwen/qwen-plus'});return{choices:[{message:{content:JSON.stringify(stage==='evidence-extract'?pack:stage==='write-grounded'?article():approved())}}]};};
  await runner.prepare(s,plan);assert.deepEqual(stages,['evidence-extract','write-grounded','review-grounded']);assert.equal(s.phase,'approved');await runner.prepare(s,plan);assert.equal(stages.length,3);assert.equal(s.groundedHistory[0].article.summary,'OLD_UNSUPPORTED_ASSERTION');
 });
 
@@ -73,4 +73,25 @@ test('recovered grounded draft revised after rejection resumes revision review i
 test('grounded evidence excludes unused marketing sources and remaps citations without losing original captures',async()=>{
  const all=[{...sources()[0],url:'https://www.foreo.com/marketing',text:'Marketing copy without instructions'},...sources()],s={...slot(),sources:all},pack={facts:[2,3,2,3].map(sourceId=>({sourceId,quote,claim:'型号说明中可核查的事实',scope:'仅限该型号说明'}))},{runner,state}=setup({contentRevision:'beauty-evidence-v2'});
  runner.model=async stage=>{if(stage==='write-grounded')assert.equal(s.sources.length,2);state.calls.push({matrixDay:s.day,matrixSlot:1,stage,status:'returned',provider:'openrouter',model:'qwen/qwen-plus'});return{choices:[{message:{content:JSON.stringify(stage==='evidence-extract'?pack:stage==='write-grounded'?article():approved())}}]};};await runner.prepare(s,plan);assert.equal(s.sources.length,2);assert(!s.article.sources.some(x=>x.url.includes('marketing')));assert.deepEqual(s.factPack.facts.map(f=>f.sourceId),[1,2,1,2]);assert.equal(s.evidenceHistory.at(-1).sources.length,3);
+});
+
+test('source quotes tolerate HTML inline comma spacing but preserve numeric spacing and word content',()=>{
+ const src=[{text:'A cleared device,you can inspect this original manufacturer instruction.'},{text:'The original dose is 1.5 units in this specific original context.'}],facts=[1,2,1,2].map(sourceId=>({sourceId,quote:src[sourceId-1].text,claim:'原文事实',scope:'原文条件'}));facts[0].quote=facts[0].quote.replace('device,you','device, you');assert.doesNotThrow(()=>validateFactPack({facts},src));facts[1].quote=facts[1].quote.replace('1.5','1. 5');assert.throws(()=>validateFactPack({facts},src),/quote/);
+});
+
+test('only cached evidence that now validates can resume once without resetting requests or daily question identity',()=>{
+ const s={...slot(),phase:'failed',runId:'old',failure:'Evidence quote does not match opened original',sources:sources()},pack={facts:[1,2,1,2].map(sourceId=>({sourceId,quote,claim:'原文事实',scope:'原文条件'}))},call={id:'retained',matrixDay:s.day,matrixSlot:1,articleId:s.question.id,stage:'evidence-extract',status:'returned',response:{choices:[{finish_reason:'stop',message:{content:JSON.stringify(pack)}}]}},{runner,state}=setup({state:{calls:[call],matrixRuns:{days:{[s.day]:{slots:[s]}},outbox:[]}}});const original=JSON.stringify(call);
+ assert.equal(runner.recoverValidatedEvidence(s.day),true);assert.equal(s.question.id,question.id);assert.equal(s.runId,'recovery-1');assert.equal(JSON.stringify(state.calls[0]),original);s.phase='failed';s.failure='Evidence quote does not match opened original';assert.equal(runner.recoverValidatedEvidence(s.day),false);
+ delete s.evidenceRecovery;call.response.choices[0].message.content=JSON.stringify({facts:pack.facts.map(f=>({...f,quote:'Made up statement with no original support whatsoever'}))});assert.equal(runner.recoverValidatedEvidence(s.day),false);assert.equal(s.phase,'failed');
+});
+
+test('unsupported extracted facts are discarded while four literal quotations across sources remain required',()=>{
+ const facts=[1,2,1,2].map(sourceId=>({sourceId,quote,claim:'中文解释仍待独立审核',scope:'原文范围'})),bad={sourceId:1,quote:'Invented quotation not present in the actual source text',claim:'Unsupported claim',scope:'none'};
+ const selected=selectVerifiedFacts({facts:[...facts,bad]},sources());assert.equal(selected.facts.length,4);assert.equal(selected.rejectedFacts.length,1);assert.throws(()=>selectVerifiedFacts({facts:[...facts.slice(0,3),bad]},sources()),/four|四/);
+ const tmSources=sources();tmSources[0].text+=' BEAR™ 2 follows this manufacturer instruction exactly.';const p={facts:[...facts.slice(0,3),{sourceId:1,quote:'BEAR ™ 2 follows this manufacturer instruction exactly.',claim:'型号原文',scope:'仅限该型号'}]};assert.doesNotThrow(()=>validateFactPack(p,tmSources));
+});
+
+test('a later grounded correction receives valid quotations only, with rejected quotes and model interpretations kept in audit',async()=>{
+ const s={...slot(),sources:sources()},pack={facts:[1,2,1,2].map(sourceId=>({sourceId,quote,claim:'WRONG_INTERPRETATION',scope:'原文条件'}))};pack.facts.push({sourceId:1,quote:'REJECTED_INVENTED_QUOTATION_NOT_IN_SOURCE',claim:'BAD_CLAIM',scope:'none'});const {runner,state}=setup({contentRevision:'beauty-evidence-v2'});
+ runner.model=async(stage,messages)=>{if(stage==='revise'){const input=JSON.parse(messages[1].content);assert(!JSON.stringify(input.evidence).includes('WRONG_INTERPRETATION'));assert(!JSON.stringify(input.evidence).includes('REJECTED_INVENTED'));assert.equal(input.evidence.facts.length,4);}state.calls.push({matrixDay:s.day,matrixSlot:1,stage,status:'returned',provider:'openrouter',model:'qwen/qwen-plus'});const data=stage==='evidence-extract'?pack:['write-grounded','revise'].includes(stage)?article():stage==='review-grounded'?{...approved(),approved:false,issues:['Correct wording']} :approved();return{choices:[{message:{content:JSON.stringify(data)}}]};};await runner.prepare(s,plan);assert.equal(s.phase,'approved');assert.equal(s.rejectedEvidenceFacts.length,1);assert.equal(s.factPack.rejectedFacts,undefined);
 });
