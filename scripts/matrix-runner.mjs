@@ -40,7 +40,40 @@ export function selectQuestions(plan,articles){
 }
 export function usageEvent(call){
  const usage=call.usage,cost=call.cost?.modelEstimateCny;
- return {provider:'DashScope / Qwen',sourceId:call.requestId||call.id,keyAlias:'本站云端Key',model:call.model,occurredAt:call.startedAt,inputTokens:usage?.prompt_tokens??usage?.input_tokens??null,outputTokens:usage?.completion_tokens??usage?.output_tokens??null,amountMicros:Number.isFinite(cost)?Math.round(cost*1e6):null,currency:'CNY',amountKind:Number.isFinite(cost)?'estimated':'unknown',status:['returned','validated'].includes(call.status)?'success':call.status==='http-error'?'failed':'unknown',activity:call.stage,evidence:call.cost?.priceSource,note:`公开单价估算，非供应商账单；价格核对日期 ${call.cost?.priceCheckedAt||'未知'}${call.search?'；联网搜索收费未知，不含在模型 token 估算中':''}`,priceSource:call.cost?.priceSource,priceCheckedAt:call.cost?.priceCheckedAt};
+ const requestId=String(call.requestId||'').trim(),rowId=String(call.id||'').trim(),sourceId=requestId||rowId||'legacy-ledger:'+hash(stableJson(Object.fromEntries(Object.entries(call).filter(([key])=>!['event','retryAuthorizedAt'].includes(key)))));
+ const timeField=['startedAt','at','completedAt'].find(key=>validTimestamp(call[key]));if(!timeField)throw Error('Historical usage timestamp requires inspection: no verified original time');
+ return {provider:'DashScope / Qwen',sourceId,keyAlias:'本站云端Key',model:call.model,occurredAt:call[timeField],inputTokens:usage?.prompt_tokens??usage?.input_tokens??null,outputTokens:usage?.completion_tokens??usage?.output_tokens??null,amountMicros:Number.isFinite(cost)?Math.round(cost*1e6):null,currency:'CNY',amountKind:Number.isFinite(cost)?'estimated':'unknown',status:['returned','validated'].includes(call.status)?'success':call.status==='http-error'?'failed':'unknown',activity:call.stage,evidence:call.cost?.priceSource,note:`公开单价估算，非供应商账单；价格核对日期 ${call.cost?.priceCheckedAt||'未知'}${call.search?'；联网搜索收费未知，不含在模型 token 估算中':''}${!requestId?'；账本记录编号，供应商请求ID缺失':''}${timeField!=='startedAt'?'；调用时间依据原始账本 '+timeField+'，开始时间缺失或无效':''}`,priceSource:call.cost?.priceSource,priceCheckedAt:call.cost?.priceCheckedAt};
+}
+const validTimestamp=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)&&Number.isFinite(Date.parse(value));
+const identityFields=['provider','sourceId','keyAlias'];
+const missingIdentity=event=>identityFields.filter(key=>typeof event[key]!=='string'||!event[key].trim());
+function stableJson(value){return JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.entries(item).sort(([a],[b])=>a<b?-1:a>b?1:0)):item);}
+const withoutIdentity=event=>Object.fromEntries(Object.entries(event).filter(([key])=>!identityFields.includes(key)));
+export function repairLegacyUsage(state){
+ const records=state.calls.map(call=>({call,old:call.event,expected:usageEvent(call)})),patches=[];
+ const patch=(target,expected)=>{
+  const missing=missingIdentity(target);if(!missing.length&&validTimestamp(target.occurredAt))return;
+  const fields=Object.fromEntries(missing.map(key=>[key,expected[key]]));
+  if(missing.includes('sourceId')&&expected.sourceId.startsWith('legacy-ledger:')&&!target.note?.includes('账本记录编号，供应商请求ID缺失'))fields.note=(target.note?target.note+'；':'')+'账本记录编号，供应商请求ID缺失';
+  if(!validTimestamp(target.occurredAt)){
+   if(target.occurredAt)throw Error('Historical audit time requires inspection; nonempty invalid timestamp retained');
+   fields.occurredAt=expected.occurredAt;fields.note=(fields.note||target.note||'')+'；调用时间依据原始账本 '+(['at','completedAt'].find(key=>expected.note.includes('原始账本 '+key))||'startedAt');
+  }
+  patches.push({target,fields});
+ };
+ for(const record of records)if(record.old)patch(record.old,record.expected);
+ for(const job of state.matrixRuns?.outbox||[]){
+  const body=job.body;if(body?.status!=='skipped'||!(body.activity==='audit'||String(body.runId||'').includes('-audit')))continue;
+  for(const event of body.usageEvents||[]){
+   const missing=missingIdentity(event);if(!missing.length&&validTimestamp(event.occurredAt))continue;
+   let matches=records.filter(r=>[r.old,r.expected].filter(Boolean).some(old=>stableJson(withoutIdentity(old))===stableJson(withoutIdentity(event))));
+   if(!matches.length&&['occurredAt','model','activity'].every(key=>typeof event[key]==='string'&&event[key]))matches=records.filter(r=>r.expected.occurredAt===event.occurredAt&&r.call.model===event.model&&r.call.stage===event.activity);
+   if(matches.length!==1)throw Error('Legacy audit identity requires inspection: candidates='+matches.length+' missing='+missing.join(','));
+   patch(event,matches[0].expected);
+  }
+ }
+ for(const {target,fields}of patches)Object.assign(target,fields);
+ return patches.length;
 }
 function publicText(article){
  const fields=[['title',article.title],['summary',article.summary],['takeaway',article.takeaway],['caution',article.caution]];
@@ -60,7 +93,7 @@ export function validateReview(article,review,sources){
    if(c.kind==='editorial'){
     const navigation=target==='title'||/^sections\.\d+\.heading$/.test(target);
     const question=/[？?]$/.test(text)&&/吗|么|何|哪|谁|几|多少|怎样|怎么|是否|能否|值得/.test(text);
-    const neutralHeading=/^[^。！？!?\d]{1,35}$/.test(text)&&/问题|要点|原理|成本|证据|人群|边界|步骤|场景|误区|条件|清单|常见疑问|资料/.test(text)&&!/保证|必然|一定|治愈|有效|无效|提升|改善|消除|减少|增加/.test(text);
+    const neutralHeading=/^[^。！？!?\d]{1,35}$/.test(text)&&/问题|要点|原理|成本|证据|人群|边界|步骤|场景|误区|条件|清单|常见疑问|资料|频次|禁忌/.test(text)&&!/保证|必然|一定|治愈|有效|无效|提升|改善|消除|减少|增加/.test(text);
     if(!(navigation&&(question||neutralHeading))&&!/建议|可以|优先|先|核对|检查|怎样|如何|是否|什么|选择|留意|注意|来源|适合|暂缓|停止|排查|清单|条件|读懂|判断|说明|步骤|预算|对照|不要|避免|使用前|不妨/.test(text))throw Error('Editorial check lacks advice or navigation wording: '+target);
    }else{
     const id=Number(c.sourceId),source=sources[id-1];
@@ -212,7 +245,7 @@ export class MatrixRunner{
  }
  async main(mode='audit'){
   if(!['audit','publish'].includes(mode))throw Error('Use audit or publish');
-  const plan=await this.plan();if(!await this.flush())return {failed:true,reportPending:true};
+  const plan=await this.plan();const identityRepairs=repairLegacyUsage(this.state);if(identityRepairs){this.m.identityRepair={at:this.at(),events:identityRepairs};this.save();}if(!await this.flush())return {failed:true,reportPending:true};
   if(mode==='audit'){
    const articles=this.articles().filter(a=>a.publicationStatus==='published'&&a.reviewStatus==='approved');
    const publishedArticles=[],approvedArtifacts=[];

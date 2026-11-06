@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {dayAt, duePlan, selectQuestions, usageEvent, validateReview, protectArticleWrite, hash, MatrixRunner} from '../scripts/matrix-runner.mjs';
+import {dayAt, duePlan, selectQuestions, usageEvent, repairLegacyUsage, validateReview, protectArticleWrite, hash, MatrixRunner} from '../scripts/matrix-runner.mjs';
 
 const plan=()=>({site:{id:'beauty',domain:'beautychoicejournal.com'},daily:{enabled:true,quota:2,time:'09:07',timezone:'Asia/Shanghai',publishMode:'auto',articleGapMinutes:10,startDate:'2026-11-06'},writing:{ready:true,instructions:[{id:'skill',name:'Beauty',version:'1',instructions:'Beauty instructions',resources:[]}],questionSets:[{id:'bank',questions:[{id:'BCJ-002',slug:'led-mask-guide',question:'LED?',category:'美容仪',status:'pending'},{id:'BCJ-003',slug:'microcurrent-guide',question:'Microcurrent?',category:'美容仪',status:'planned'}]}]},reportUrl:'https://matrix.relaxbrohk.com/api/runner/report/beauty',searchUrl:'https://matrix.relaxbrohk.com/api/runner/search/beauty'});
 test('Shanghai schedule, disabled, future start and exact two quota are enforced',()=>{
@@ -25,6 +25,7 @@ test('review rejects uncited facts, forged quotations and omitted summaries',()=
  const review={slug:'test',approved:true,decisionGain:'明确可执行的选购判断和检查动作',issues:[],checks:['title','summary','takeaway','sections.0.heading','sections.0.paragraphs.0','caution'].map(target=>({target,kind:target==='sections.0.paragraphs.0'?'supported':'editorial',sourceId:1,quote:sources[0].text}))};
  assert.throws(()=>validateReview(a,review,sources));
  a.title='建议核对标题';a.sections[0].heading='建议先选择';assert.doesNotThrow(()=>validateReview(a,review,sources));
+ a.sections[0].heading='频次与禁忌';assert.doesNotThrow(()=>validateReview(a,review,sources));a.sections[0].heading='频次增加保证有效';assert.throws(()=>validateReview(a,review,sources));a.sections[0].heading='频次与禁忌';
  review.checks.pop();assert.throws(()=>validateReview(a,review,sources));
 });
 test('audit reports history with original dates and never calls model or deployment',async()=>{
@@ -138,4 +139,35 @@ test('Matrix report errors retain bounded sanitized JSON detail and log a redact
 test('oversize or non-JSON Matrix error bodies are not printed',async()=>{
  const state={calls:[],batches:{}};const runner=new MatrixRunner({state,save:()=>{},fetch:async()=>new Response('x'.repeat(100000)+'secret-tail',{status:503})});runner.currentPlan=plan();
  await runner.report({day:'2026-11-06',slot:1},'skipped');assert.equal(state.matrixRuns.reportFailure.message,'Matrix report HTTP 503');assert.equal(state.matrixRuns.outbox.length,1);
+});
+test('legacy call ID is stable, explicitly local, and independent of derived event metadata',()=>{
+ const call={startedAt:'2026-11-05T12:00:00Z',stage:'health',model:'qwen-plus',status:'returned',usage:{prompt_tokens:10,completion_tokens:1},cost:{modelEstimateCny:.00001}};
+ const first=usageEvent(call);assert.match(first.sourceId,/^legacy-ledger:[a-f0-9]{64}$/);assert.match(first.note,/账本记录编号，供应商请求ID缺失/);
+ call.event={old:'derived metadata'};assert.equal(usageEvent(call).sourceId,first.sourceId);assert.equal(usageEvent({...call,stage:'research'}).sourceId===first.sourceId,false);
+ call.id='saved-uuid';assert.equal(usageEvent(call).sourceId,'saved-uuid');call.requestId='provider-id';assert.equal(usageEvent(call).sourceId,'provider-id');
+});
+test('legacy audit identity repair preserves amounts, dates and original calls without paid requests',async()=>{
+ const call={id:'saved-uuid',startedAt:'2026-11-05T12:00:00Z',stage:'health',model:'qwen-plus',status:'returned',usage:null,cost:{modelEstimateCny:null}};
+ const old={model:call.model,occurredAt:call.startedAt,activity:call.stage,amountMicros:null,amountKind:'unknown',inputTokens:null,outputTokens:null,currency:'CNY',status:'unknown',note:'Original note'};call.event={...old};
+ const body={runId:'old-audit-0',activity:'audit',day:'2026-11-06',slot:1,at:'2026-11-06T01:00:00Z',status:'skipped',usageEvents:[{...old}]},state={calls:[call],matrixRuns:{days:{},outbox:[{url:plan().reportUrl,body}]}},sent=[];
+ const runner=new MatrixRunner({state,save:()=>{},siteId:'beauty',token:'test',articles:()=>[],fetch:async(url,options)=>{if(url.includes('/plan/'))return{ok:true,json:async()=>plan()};assert(!url.includes('chat/completions'));sent.push(JSON.parse(options.body));return{ok:true,status:200};}});
+ await runner.main('audit');assert.equal(sent[0].usageEvents[0].sourceId,'saved-uuid');assert.equal(sent[0].usageEvents[0].provider,'DashScope / Qwen');assert.equal(sent[0].usageEvents[0].keyAlias,'本站云端Key');for(const[key,value]of Object.entries(old))assert.deepEqual(sent[0].usageEvents[0][key],value);assert.equal(sent[0].at,body.at);assert.equal(call.id,'saved-uuid');assert.equal(call.startedAt,'2026-11-05T12:00:00Z');assert.equal(call.usage,null);
+});
+test('ambiguous legacy audit identity repair stops without mutating history or outbox',()=>{
+ const event={model:'qwen-plus',occurredAt:'2026-11-05T12:00:00Z',activity:'health',amountMicros:null};const call={startedAt:event.occurredAt,model:event.model,stage:event.activity,event:{...event}};
+ const state={calls:[{...call,id:'one'},{...call,id:'two'}],matrixRuns:{outbox:[{body:{activity:'audit',status:'skipped',usageEvents:[{...event}]}}]}};const original=JSON.stringify(state);
+ assert.throws(()=>repairLegacyUsage(state),/candidates=2/);assert.equal(JSON.stringify(state),original);
+});
+test('retained audit missing ID receives only a labeled local identity with original monetary evidence intact',()=>{
+ const call={startedAt:'2026-11-05T12:00:00Z',model:'qwen-plus',stage:'legacy-health',status:'returned',usage:null,cost:{modelEstimateCny:null}};
+ const event={...usageEvent(call)};delete event.sourceId;event.note='Original receipt';call.event={...event};
+ const state={calls:[call],matrixRuns:{outbox:[{body:{activity:'audit',status:'skipped',usageEvents:[{...event}]}}]}};const originalCall=JSON.stringify({...call,event:undefined});
+ repairLegacyUsage(state);const repaired=state.matrixRuns.outbox[0].body.usageEvents[0];assert.equal(repaired.sourceId,usageEvent(call).sourceId);assert.match(repaired.note,/Original receipt；账本记录编号，供应商请求ID缺失/);assert.equal(repaired.amountMicros,null);assert.equal(repaired.occurredAt,event.occurredAt);assert.equal(JSON.stringify({...call,event:undefined}),originalCall);assert.equal(repairLegacyUsage(state),0);
+});
+test('historical usage uses verified original alternate timestamps with provenance and never defaults to now',()=>{
+ const base={id:'saved-original',stage:'health',model:'qwen-plus',status:'returned'};
+ for(const field of['at','completedAt']){const call={...base,[field]:'2026-11-05T12:34:56Z'},event=usageEvent(call);assert.equal(event.sourceId,base.id);assert.equal(event.occurredAt,call[field]);assert.match(event.note,new RegExp('原始账本 '+field));}
+ assert.throws(()=>usageEvent(base),/timestamp|时间/i);assert.throws(()=>usageEvent({...base,at:'2026-11-05'}),/timestamp|时间/i);
+ const call={...base,at:'2026-11-05T12:34:56Z',event:{provider:'DashScope / Qwen',sourceId:base.id,keyAlias:'本站云端Key',model:base.model,activity:base.stage,amountMicros:null,note:'Original'}};
+ const state={calls:[call],matrixRuns:{outbox:[{body:{activity:'audit',status:'skipped',usageEvents:[{...call.event}]}}]}};repairLegacyUsage(state);const event=state.matrixRuns.outbox[0].body.usageEvents[0];assert.equal(event.occurredAt,call.at);assert.match(event.note,/原始账本 at/);assert.equal(event.amountMicros,null);assert.equal(event.sourceId,base.id);
 });
