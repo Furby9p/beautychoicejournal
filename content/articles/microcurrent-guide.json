@@ -1,0 +1,77 @@
+{
+  "slug": "microcurrent-guide",
+  "category": "美容仪",
+  "title": "微电流美容仪怎么用，凝胶、使用频率和禁忌该怎样核对？",
+  "cover": "device",
+  "label": "微电流使用笔记",
+  "tags": [
+    "微电流",
+    "使用技巧"
+  ],
+  "summary": "微电流美容仪的使用介质、频率和禁忌因具体型号而异。本文基于 NuFACE 和 FOREO 官方手册，梳理核对介质、操作区域与禁忌的具体方法，帮助读者按自身设备说明安全使用。",
+  "takeaway": "不要将不同品牌的微电流教程通用化。使用前必须核对当前型号的官方介质要求、禁用区域和禁忌症，出现不适立即停用。",
+  "sections": [
+    {
+      "heading": "介质与导电：为什么不能随便换凝胶？",
+      "paragraphs": [
+        "微电流美容仪需要特定介质来传导电流，不能随意用日常面霜替代。NuFACE 官方手册明确指出，任何面霜、乳液或油性产品都会阻挡微电流，必须使用其专用的 Microcurrent Activator [2]。FOREO 同样强调，BEAR 2 必须搭配其专属精华露，利用甘油等成分保证导电且不刺激皮肤 [3]。",
+        "在实际操作中，介质的涂抹量也有讲究。NuFACE 建议像敷面膜一样逐区涂抹专用凝胶 [2]；FOREO 则提示需留下一层薄精华让设备顺利滑动，护理多个区域时可分区涂抹 [3]。如果看到其他教程建议使用普通保湿霜，请先核对您的具体型号说明书，不支持的介质可能导致无效或体验不佳。"
+      ]
+    },
+    {
+      "heading": "使用频率与强度：按型号核对，不盲目叠加",
+      "paragraphs": [
+        "使用频率和强度必须按具体型号核对，不能把不同品牌的教程通用化。NuFACE FIX MicroWand 的建议是每个治疗区域每天最多使用 2 次，每周 5 天 [1]。而 FOREO BEAR 2 的说明则是适合每天早晨或夜间使用 [3]。",
+        "关于强度调节，FOREO 说明更高的微电流强度意味着更大功率，能到达皮肤深层，但强烈建议用户从第一档开始测试，以了解最适合自己的强度，并可通过按键或 APP 调整 [3]。不要默认所有机器都需要开最大档，也不要盲目增加使用天数。"
+      ]
+    },
+    {
+      "heading": "操作区域与禁忌：核对说明书的“禁用清单”",
+      "paragraphs": [
+        "操作区域和禁忌症是安全使用的核心，必须严格对照说明书。探头必须始终同时接触皮肤 [1][3]。NuFACE FIX 针对眼下、嘴周笑纹和额头 [1]；FOREO 则明确禁止在眼眶骨内和颈部中线骨骼上使用 [3]。",
+        "禁忌症清单因品牌而异，需逐项排查。NuFACE 列出癫痫或抽搐史、近期手术、植入电子设备（如除颤器、起搏器）为绝对禁忌 [2]。FOREO 的清单更长，还包括出血性疾病、癌症、金属植入物、颈动脉区域、红肿或感染皮肤，以及酒渣鼻、痣、疣等皮肤状况 [3]。如果说明书未明确您的皮肤状况是否可用，请暂停使用并向厂家确认。"
+      ]
+    }
+  ],
+  "tips": [
+    "清洁探头时，FOREO 明确提示切勿使用含酒精、汽油或丙酮的清洁产品，以免损坏硅胶或刺激皮肤 [3]。",
+    "护肤顺序上，NuFACE 建议将微电流护理作为最后一步，结束后再涂抹眼霜、保湿霜和防晒 [1]。",
+    "首次使用前，FOREO 要求下载官方 APP 激活并注册设备，建议同步阅读该型号专属的电子手册 [3]。"
+  ],
+  "caution": "微电流美容仪属于家用电子设备，不能替代专业医疗治疗。使用过程中如感到任何不适或刺激，应立即停止使用并咨询医生 [3]。有特殊健康状况或皮肤疾病者，使用前应寻求专业评估。",
+  "sources": [
+    {
+      "url": "https://www.mynuface.com/cdn/shop/files/NF_FIXMicroWand_UserManual_Global_75418_082024_spreads.pdf?v=7589242850288462523",
+      "title": "用户手册确保获得最佳效果！",
+      "checkedAt": "2026-11-07T01:08:06.310Z",
+      "contentHash": "ac7d55c8976eda244dec50b17233882ac98505a92d25de0651f606df66482ac1",
+      "textHash": "aa30416644afab42d48a1ea5df70f83b5d1ca35f8f1ab22b5d247b92270ea153"
+    },
+    {
+      "url": "https://www.mynuface.com/cdn/shop/files/NF_LegacyTrinity_RestageStyle_UserManual_INTL_75287_072621.pdf?v=7951594757515742570",
+      "title": "NF_LegacyTrinity_RestageStyle_UserManual_INTL_75287_072621.indd",
+      "checkedAt": "2026-11-07T01:08:06.805Z",
+      "contentHash": "8b2401b27b1b685f1a1527bba103636d2d9bf5fa1866357bcf9389d0640a47a8",
+      "textHash": "506089d3066602d8359b59e8a6546a01239c668415521053841535e9262d17f3"
+    },
+    {
+      "url": "https://assets.foreo.com/files/static/manuals/2023-07/BEAR%202_manual_chinese.pdf?VersionId=FT0lUQQRq.CkAJaBOwws4r2rwoadafDf",
+      "title": "智能微电流美容仪",
+      "checkedAt": "2026-11-07T01:08:07.439Z",
+      "contentHash": "ffe0438f6d61e6804ace84086e8e621440617c1e9ee9c4bd7680af5bcd8ae614",
+      "textHash": "79c367000cb6dca3105645c521f886c2d32b844c93824f0e05dae7f8a0b88d64"
+    }
+  ],
+  "provider": "openrouter",
+  "model": "qwen/qwen3.7-plus",
+  "author": "美妆选物志编辑部",
+  "publicationStatus": "published",
+  "reviewStatus": "approved",
+  "publishedAt": "2026-11-07T01:56:15.922Z",
+  "matrix": {
+    "questionId": "BCJ-003",
+    "questionSetId": "source-question-bank",
+    "snapshotHash": "b12a71732dfb484892fae2204db19b00d19ebbc5c2929ad11f971624a737788d",
+    "writtenAt": "2026-11-07T01:54:40.056Z"
+  }
+}

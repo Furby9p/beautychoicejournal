@@ -18,7 +18,7 @@ service cloud.firestore {
   match /comments/{id} {
    allow get: if true;
    allow list: if request.query.limit <= 30;
-   allow create: if author() && locked(id,'comment') && request.resource.data.keys().hasOnly(['uid','nickname','body','createdAt','thread']) && text(request.resource.data.thread,1,100) && (request.resource.data.thread in ["beauty-device-guide","led-mask-guide","sunscreen-selection","retinol-beginners","foundation-caking"] || exists(/databases/$(database)/documents/posts/$(request.resource.data.thread)));
+   allow create: if author() && locked(id,'comment') && request.resource.data.keys().hasOnly(['uid','nickname','body','createdAt','thread']) && text(request.resource.data.thread,1,100) && (request.resource.data.thread in ["beauty-device-guide","led-mask-guide","microcurrent-guide","sunscreen-selection","retinol-beginners","foundation-caking"] || exists(/databases/$(database)/documents/posts/$(request.resource.data.thread)));
    allow delete: if signed() && resource.data.uid==request.auth.uid;
   }
   match /reports/{id} {
