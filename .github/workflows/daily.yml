@@ -27,7 +27,7 @@ jobs:
   publish:
     if: github.repository == 'Furby9p/beautychoicejournal' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -53,7 +53,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: qwen/qwen3.7-plus
           MATRIX_PROVIDER_REVISION: geo-shared-openrouter-v1
-          MATRIX_CONTENT_REVISION: beauty-evidence-v4
+          MATRIX_CONTENT_REVISION: beauty-evidence-v5
           BCJ_COMMENT_RECHECK: ${{ inputs.recheck_comments && 'true' || 'false' }}
           BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
           MATRIX_RUNNER_TOKEN: ${{ secrets.MATRIX_RUNNER_TOKEN }}
