@@ -1,8 +1,7 @@
-name: Beauty Matrix daily writer and development comments
+name: Beauty Matrix daily writer
 on:
   schedule:
     - cron: '7,37 * * * *'
-    - cron: '0 21 * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -54,14 +53,14 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: qwen/qwen3.7-plus
           MATRIX_PROVIDER_REVISION: geo-shared-openrouter-v1
-          MATRIX_CONTENT_REVISION: beauty-evidence-v3
+          MATRIX_CONTENT_REVISION: beauty-evidence-v4
           BCJ_COMMENT_RECHECK: ${{ inputs.recheck_comments && 'true' || 'false' }}
           BCJ_LEDGER_KEY: ${{ secrets.BCJ_LEDGER_KEY }}
           MATRIX_RUNNER_TOKEN: ${{ secrets.MATRIX_RUNNER_TOKEN }}
           MATRIX_SITE_ID: ${{ secrets.MATRIX_SITE_ID }}
           MATRIX_ORIGIN: https://matrix.relaxbrohk.com
           MATRIX_RECHECK_PROVIDER: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'publish' && inputs.recheck_provider && 'true' || 'false' }}
-          BCJ_MODE: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 21 * * *' && 'comments' || 'publish') || inputs.mode }}
+          BCJ_MODE: ${{ github.event_name == 'schedule' && 'publish' || inputs.mode }}
         run: |
           if [ "$BCJ_MODE" = "comments" ]; then
             node scripts/cloud-daily.mjs comments

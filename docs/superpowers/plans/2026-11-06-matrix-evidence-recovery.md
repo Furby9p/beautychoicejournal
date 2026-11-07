@@ -17,3 +17,6 @@
 ## Review focus
 
 Pending/lost/truncated model responses must never buy a duplicate; old rejected drafts and invoices stay unchanged; paused plans stop before paid work/publishing; PDF/HTML evidence cannot contain a robot challenge; failed revision cannot overwrite an approved publication; replay cannot exceed two articles or reset paid call caps.
+
+
+2026-11-07 v4 update: remove automatic development-comments cron; retain manual mode. Fresh article review uses unique -reasoned stage, Qwen3.7 Plus reasoning enabled, 16000 combined output cap and 600-second deadline. Model exposes no verified per-reasoning budget option; do not invent one. Exhausted/ambiguous responses remain blocked and usage is retained. Grounded composition specifies >=650 body characters. Failure reports include sanitized substantive reviewer issues. No factual gate or daily quota is relaxed. Focused 3/3 plus complete 109/109 tests, build and secret/crawl verification pass locally. Live two-publication and search acceptance proof remain pending.
