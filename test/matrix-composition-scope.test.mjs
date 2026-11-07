@@ -24,6 +24,6 @@ test('fresh v5 writer reserves reasoning space and records its actual model prov
  await runner.groundedArticle(slot,'Use exact evidence');assert.equal(slot.article.provider,'openrouter');assert.equal(slot.article.model,'qwen/qwen3.7-plus');
 });
 test('a saved grounded draft cannot bypass selected-evidence validation when resumed',async()=>{
- const slot=s();slot.phase='planned';slot.groundedAt='2026-11-07T01:00:00Z';slot.article.summary='面罩需要42单位[1]';const state={calls:[]},runner=new MatrixRunner({state,save:()=>{},contentRevision:'beauty-evidence-v5'}),stages=[];runner.acceptedReport=async()=>{};runner.model=async stage=>{stages.push(stage);assert.equal(stage,'revise-grounded-reasoned');return{choices:[{message:{content:JSON.stringify(slot.article)}}]};};
+ const slot=s();slot.phase='planned';slot.groundedAt='2026-11-07T01:00:00Z';slot.article.summary='面罩需要42单位[1]';const state={calls:[]},runner=new MatrixRunner({state,save:()=>{},contentRevision:'beauty-evidence-v5'}),stages=[];runner.acceptedReport=async()=>{};runner.model=async stage=>{stages.push(stage);assert.equal(stage,'revise-grounded-reasoned');return{choices:[{message:{content:JSON.stringify({...slot.article,summary:slot.article.summary.replace('[1]','[S1]')})}}]};};
  await assert.rejects(runner.prepare(slot,{writing:{instructions:[{instructions:'Use facts'}]}}),/Unselected numeric/);assert.deepEqual(stages,['revise-grounded-reasoned']);assert.notEqual(slot.phase,'approved');assert.equal(slot.revisionHistory[0].review.origin,'deterministic-selected-evidence-gate');
 });
