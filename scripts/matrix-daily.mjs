@@ -3,10 +3,11 @@ import {execFileSync} from 'node:child_process';
 import {loadState,persist} from './cloud-state.mjs';
 import {MatrixRunner,hash,protectArticleWrite} from './matrix-runner.mjs';
 import {loadReferenceFx} from './matrix-fx.mjs';
+import {childEnvironment} from './child-env.mjs';
 
 const store=loadState();
 function command(program,args){
- const env={...process.env};for(const key of ['DASHSCOPE_API_KEY','DASHSCOPE_BASE_URL','OPENROUTER_API_KEY','BCJ_LEDGER_KEY','MATRIX_RUNNER_TOKEN'])delete env[key];
+ const env=childEnvironment();
  execFileSync(program,args,{stdio:'inherit',env});
 }
 const bankFile='content/question-bank.json';
