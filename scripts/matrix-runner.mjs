@@ -543,6 +543,16 @@ export class MatrixRunner{
   const r=await this.fetch(url+'?verify='+this.now().getTime(),{signal:AbortSignal.timeout(20000),redirect:'error'});if(r.status!==200||hash(await r.text())!==expected)return false;
   slot.contentHashes={[url]:expected};return true;
  }
+ async submitSearch(slot,plan){
+  if(slot.searchReceipt?.callbackAcknowledged||slot.searchReceipt?.status===200&&!slot.searchReceipt.failure)return;
+  try{
+   const r=await this.fetch(plan.searchUrl,{method:'POST',headers:{Authorization:'Bearer '+this.token,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(90000),redirect:'error'});
+   const receipt={at:this.at(),status:r.status,callbackAcknowledged:r.ok,meaning:'Matrix callback status is separate from engine acceptance and indexing'};
+   if(r.body){const reader=r.body.getReader(),chunks=[];let size=0,truncated=false;try{while(size<=65536){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>65536){truncated=true;break;}chunks.push(part.value);}if(!truncated){const d=JSON.parse(Buffer.concat(chunks).toString('utf8'));receipt.pending=d.pending??null;receipt.channels=d.channels?.filter(c=>['indexnow','baidu','google'].includes(c.id)).map(c=>({id:c.id,status:c.status,httpStatus:c.httpStatus,lastSubmittedAt:c.lastSubmittedAt,nextRetryAt:c.nextRetryAt,detail:this.redact(c.detail)}));}else receipt.detail='Response summary exceeded bound; engine receipts remain in Matrix';}catch{receipt.detail='Engine summary unavailable; consult Matrix channel receipts';}finally{await reader.cancel().catch(()=>{});}}
+   slot.searchReceipt=receipt;
+  }catch(e){slot.searchReceipt={at:this.at(),failure:this.redact(e),callbackAcknowledged:false};}
+  this.save();
+ }
  async publish(slot,plan){
   if(slot.publishedAt){await this.report(slot,'published',{contentHashes:slot.contentHashes,reviewPassed:true,sourceCount:slot.sources.length});return;}
   if(!slot.article||slot.phase!=='approved')await this.prepare(slot,plan);
@@ -563,7 +573,7 @@ export class MatrixRunner{
   slot.publishedAt=this.at();slot.phase='published';this.m.lastPublishedAt=slot.publishedAt;this.save();
   this.markPublished(slot.question);this.commitContent(slot);this.save();
   await this.acceptedReport(slot,'published',{contentHashes:slot.contentHashes,reviewPassed:true,sourceCount:slot.sources.length});
-  try{const r=await this.fetch(plan.searchUrl,{method:'POST',headers:{Authorization:'Bearer '+this.token,'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(20000),redirect:'error'});slot.searchReceipt={at:this.at(),status:r.status};}catch(e){slot.searchReceipt={at:this.at(),failure:this.redact(e)};}this.save();
+  await this.submitSearch(slot,plan);
  }
  async main(mode='audit'){
   if(!['audit','publish'].includes(mode))throw Error('Use audit or publish');
@@ -585,6 +595,13 @@ export class MatrixRunner{
    const providerDetail=typeof providerMessage==='string'?'；提供方说明：'+this.redact(providerMessage).replace(/sk-[a-zA-Z0-9_-]{10,}|Bearer\s+\S+/g,'[redacted]'):'';
    for(let offset=0;offset<Math.max(1,events.length);offset+=50)if(!await this.report({day:dayAt(this.now()),slot:1,runId:`${this.runId}-audit-${offset/50}`},'skipped',{activity:'audit',reason:'已同步历史账本，未调用模型'+providerDetail+(undatedCount?'；历史账本'+undatedCount+'条时间缺失待核对，未计入今日费用':'')+(this.state.lastFailure?'；上次失败：'+this.state.lastFailure.at+' '+this.state.lastFailure.message:''),publishedArticles,approvedArtifacts,usageEvents:events.slice(offset,offset+50),lastFailure:this.state.lastFailure||null}))return {failed:true,reportPending:true};
    console.log('Matrix audit: historical facts queued/reported; no model or deployment call.');return;
+  }
+  // Recover verified publications across calendar days after the report outbox
+  // flush. Pausing new writing must not lose an already-published search hook.
+  let callbackBudget=2;
+  for(const slot of Object.values(this.m.days).flatMap(d=>d.slots)){
+   if(slot.phase!=='published'||!slot.publishedAt||slot.searchReceipt?.callbackAcknowledged||slot.searchReceipt?.status===200&&!slot.searchReceipt.failure)continue;
+   await this.submitSearch(slot,plan);if(--callbackBudget===0||!slot.searchReceipt.callbackAcknowledged)break;
   }
   if(!duePlan(plan,this.now())){console.log('Matrix plan not due or paused; no paid call.');return;}
   const day=dayAt(this.now());
