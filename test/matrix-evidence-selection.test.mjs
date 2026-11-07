@@ -1,0 +1,19 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {sourcePassages,selectedPassages,MatrixRunner} from '../scripts/matrix-runner.mjs';
+const sources=[1,2].map(id=>({url:`https://www.fda.gov/${id}`,title:'Original',text:('This named model has a manufacturer instruction. Keep its exact scope and never replace it with universal advice. ').repeat(150)}));
+test('bounded passage IDs point to exact unmodified source spans including numeric spacing',()=>{
+ const originals=[...sources,{text:'Use 1.5 mA and not 1. 5 mA. '+sources[0].text}],passages=sourcePassages(originals);
+ assert(passages.length<=originals.length*24);assert.equal(new Set(passages.map(x=>x.id)).size,passages.length);for(const p of passages)assert(originals[p.sourceId-1].text.includes(p.quote));assert(passages.some(p=>p.quote.includes('1.5 mA and not 1. 5 mA')));
+ const chosen=[...passages.filter(x=>x.sourceId===1).slice(0,2),...passages.filter(x=>x.sourceId===2).slice(0,2)];const pack={facts:chosen.map(p=>({passageId:p.id,claim:'Model translation is not trusted',scope:'Named model only'}))};
+ const facts=selectedPassages(pack,passages,originals).facts;assert.deepEqual(facts.map(x=>x.quote),chosen.map(x=>x.quote));assert.throws(()=>selectedPassages({facts:[...pack.facts.slice(0,3),{passageId:'unknown',claim:'test',scope:'test'}]},passages,originals),/passage/i);assert.throws(()=>selectedPassages({facts:Array(4).fill(pack.facts[0])},passages,originals),/duplicate/i);
+});
+test('only a completed same-day literal extraction rejection can resume the new selection once',()=>{
+ const s={slot:1,day:'2026-11-07',question:{id:'BCJ-002'},phase:'failed',failure:'Evidence pack needs four to ten verified facts',sources,runId:'old'};const state={calls:[{matrixDay:s.day,matrixSlot:1,articleId:s.question.id,stage:'evidence-extract',status:'returned',response:{choices:[{finish_reason:'stop',message:{content:'{}'}}]}}],matrixRuns:{days:{[s.day]:{slots:[s]}},outbox:[]}};const runner=new MatrixRunner({state,save:()=>{},contentRevision:'beauty-evidence-v4',runId:'new'});assert.equal(runner.recoverEvidenceSelection(s.day),true);assert.equal(s.phase,'planned');assert.equal(s.evidenceSelectionRecovery.previousFailure,'Evidence pack needs four to ten verified facts');s.phase='failed';assert.equal(runner.recoverEvidenceSelection(s.day),false);assert.equal(state.calls.length,1);
+});
+test('v4 fresh composition selects IDs once and reuses the verified pack on resume',async()=>{
+ const state={calls:[],matrixRuns:{days:{},outbox:[]}},runner=new MatrixRunner({state,save:()=>{},contentRevision:'beauty-evidence-v4'}),stages=[];
+ const s={day:'2026-11-07',slot:1,question:{id:'BCJ-002',slug:'led-mask-guide',question:'怎样核对？'},sources:structuredClone(sources)};runner.acceptedReport=async()=>{};
+ runner.model=async(stage,messages)=>{stages.push(stage);let content;if(stage==='evidence-select'){const payload=JSON.parse(messages[1].content);assert(payload.passages.every(p=>s.sources[p.sourceId-1].text.includes(p.quote)));content={facts:[...payload.passages.filter(p=>p.sourceId===1).slice(0,2),...payload.passages.filter(p=>p.sourceId===2).slice(0,2)].map(p=>({passageId:p.id,claim:'Scoped original',scope:'Named model only'}))};}else if(stage==='write-grounded')content={slug:s.question.slug,title:s.question.question,summary:'建议核对',takeaway:'建议核对',sections:[{heading:'核对清单',paragraphs:['建议核对具体型号说明中的适用条件和使用限制。'.repeat(40)]}],tips:[],caution:'建议先核对'};else{assert.equal(stage,'review-grounded-reasoned');content={approved:false,issues:['Do not publish this test fixture']};}return{choices:[{message:{content:JSON.stringify(content)}}]};};
+ await runner.groundedArticle(s,'Use sources');assert.equal(s.factPack.facts.length,4);assert.deepEqual(stages,['evidence-select','write-grounded','review-grounded-reasoned']);await runner.groundedArticle(s,'Use sources');assert.equal(stages.length,3);
+});
